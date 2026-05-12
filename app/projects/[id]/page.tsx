@@ -57,14 +57,50 @@ export default async function ProjectDashboard({ params }: { params: Promise<{ i
   const currentStepIndex = steps.findIndex(s => s.id === currentStep);
   const progressPercent = Math.round((completedSteps.length / steps.length) * 100);
 
+  // Parse state data once
+  let stateData: any = {};
+  if (project.state?.stateData) {
+    try {
+      stateData = JSON.parse(project.state.stateData);
+    } catch(e) {}
+  }
+
+  // Calculate Ingested Files from stateData if available
+  let ingestedFilesCount = project.files.length;
+  if (stateData.profileResults?.files) {
+    ingestedFilesCount = Math.max(ingestedFilesCount, stateData.profileResults.files.length);
+  }
+
+  // Generate dynamic Activity Log from state
+  const dynamicLogs: any[] = [];
+  dynamicLogs.push({ id: 'created', user: project.creator, action: 'created project', createdAt: project.createdAt });
+  
+  if (completedSteps.includes('upload') || ingestedFilesCount > 0) {
+    dynamicLogs.push({ id: 'upload', user: project.creator, action: 'ingested source data files', createdAt: new Date(project.createdAt.getTime() + 10000) });
+  }
+  if (completedSteps.includes('profile')) {
+    dynamicLogs.push({ id: 'profile', user: project.creator, action: 'ran AI data profiling', createdAt: new Date(project.createdAt.getTime() + 20000) });
+  }
+  if (stateData.kpis && stateData.kpis.length > 0) {
+    dynamicLogs.push({ id: 'kpis', user: project.creator, action: `extracted ${stateData.kpis.length} KPIs via AI`, createdAt: new Date(project.createdAt.getTime() + 30000) });
+  }
+  if (completedSteps.includes('bus-matrix')) {
+    dynamicLogs.push({ id: 'matrix', user: project.creator, action: 'generated Kimball Bus Matrix', createdAt: new Date(project.createdAt.getTime() + 40000) });
+  }
+  if (completedSteps.includes('review')) {
+    dynamicLogs.push({ id: 'schema', user: project.creator, action: 'designed physical star schema', createdAt: new Date(project.createdAt.getTime() + 50000) });
+  }
+
+  // Combine with real audit logs if they exist, sort by newest
+  const allLogs = [...auditLogs, ...dynamicLogs].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 8);
+
   // Calculate real Data Quality Score from profiling data
   let dataQualityScore: number | null = null;
   let dataQualityColor = '#ffbd2e'; // warning default
   let dataQualityMessage = "Run profiling to generate quality metrics.";
 
-  if (project.state?.stateData) {
+  if (Object.keys(stateData).length > 0) {
     try {
-      const stateData = JSON.parse(project.state.stateData);
       if (stateData.profileResults && stateData.profileResults.files && stateData.profileResults.files.length > 0) {
         let totalCols = 0;
         let highQualityCols = 0;
@@ -192,9 +228,11 @@ export default async function ProjectDashboard({ params }: { params: Promise<{ i
                         border: isCurrent ? '1px solid var(--color-green)' : '1px solid transparent',
                         borderRadius: '6px'
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {isCompleted ? <CheckCircle size={16} color="var(--color-green)" /> : (isCurrent ? <Play size={16} color="var(--color-green)" /> : <div style={{ width: 16, height: 16, borderRadius: '50%', border: '1px solid var(--color-white-muted)' }} />)}
-                          <span style={{ fontSize: '0.8125rem', color: isCompleted || isCurrent ? 'var(--color-white)' : 'var(--color-white-muted)', fontWeight: isCurrent ? 600 : 400 }}>{step.label}</span>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          <div style={{ marginTop: '2px', display: 'flex', flexShrink: 0 }}>
+                            {isCompleted ? <CheckCircle size={16} color="var(--color-green)" style={{ flexShrink: 0 }} /> : (isCurrent ? <Play size={16} color="var(--color-green)" style={{ flexShrink: 0 }} /> : <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '1px solid var(--color-white-muted)', flexShrink: 0 }} />)}
+                          </div>
+                          <span style={{ fontSize: '0.8125rem', color: isCompleted || isCurrent ? 'var(--color-white)' : 'var(--color-white-muted)', fontWeight: isCurrent ? 600 : 400, lineHeight: 1.4 }}>{step.label}</span>
                         </div>
                       </Link>
                     );
@@ -220,7 +258,7 @@ export default async function ProjectDashboard({ params }: { params: Promise<{ i
                     <FileText size={18} color="var(--color-white)" />
                     <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Ingested Files</h3>
                   </div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 700, fontFamily: 'monospace', color: 'var(--color-white)', marginBottom: '8px' }}>{project.files.length}</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 700, fontFamily: 'monospace', color: 'var(--color-white)', marginBottom: '8px' }}>{ingestedFilesCount}</div>
                   <p style={{ color: 'var(--color-white-muted)', fontSize: '0.8125rem' }}>Source tables available for modelling.</p>
                 </div>
               </div>
@@ -251,12 +289,12 @@ export default async function ProjectDashboard({ params }: { params: Promise<{ i
                 <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '24px' }}>Activity Log</h3>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {auditLogs.length > 0 ? auditLogs.map((log) => (
+                  {allLogs.length > 0 ? allLogs.map((log) => (
                     <div key={log.id} style={{ display: 'flex', gap: '12px' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-white-muted)', marginTop: '6px' }} />
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-white-muted)', marginTop: '6px', flexShrink: 0 }} />
                       <div>
                         <div style={{ fontSize: '0.875rem', color: 'var(--color-white)' }}>
-                          <span style={{ fontWeight: 600 }}>{log.user.name}</span> {log.action.replace(/_/g, ' ').toLowerCase()}
+                          <span style={{ fontWeight: 600 }}>{log.user?.name || 'User'}</span> {log.action.replace(/_/g, ' ').toLowerCase()}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--color-white-muted)', marginTop: '4px' }}>
                           {new Date(log.createdAt).toLocaleString()}

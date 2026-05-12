@@ -29,6 +29,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json(newState);
     }
 
+    if (state && state.stateData) {
+      try {
+        let parsed = JSON.parse(state.stateData);
+        if (typeof parsed === 'string') {
+           // It was double stringified, clean it up
+           state.stateData = parsed;
+        }
+      } catch(e) {}
+    }
+
     return NextResponse.json(state);
   } catch (error) {
     console.error(error);
@@ -51,14 +61,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       where: { projectId: id },
       update: {
         currentStep: currentStep ?? undefined,
-        completedSteps: completedSteps ? JSON.stringify(completedSteps) : undefined,
-        stateData: stateData ? JSON.stringify(stateData) : undefined,
+        completedSteps: completedSteps ? (typeof completedSteps === 'string' ? completedSteps : JSON.stringify(completedSteps)) : undefined,
+        stateData: stateData ? (typeof stateData === 'string' ? stateData : JSON.stringify(stateData)) : undefined,
       },
       create: {
         projectId: id,
         currentStep: currentStep || 'upload',
-        completedSteps: JSON.stringify(completedSteps || []),
-        stateData: JSON.stringify(stateData || {}),
+        completedSteps: typeof completedSteps === 'string' ? completedSteps : JSON.stringify(completedSteps || []),
+        stateData: typeof stateData === 'string' ? stateData : JSON.stringify(stateData || {}),
       }
     });
 
