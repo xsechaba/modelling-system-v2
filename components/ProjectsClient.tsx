@@ -10,7 +10,7 @@ export default function ProjectsClient({ user, initialProjects }: { user: any, i
   const router = useRouter();
 
   // Create project form state
-  const [newProjectData, setNewProjectData] = useState({ name: '', access: 'Private', repo: '' });
+  const [newProjectData, setNewProjectData] = useState({ name: '', access: 'Private', repo: '', entryPath: 'data-first' });
   const [isCreating, setIsCreating] = useState(false);
 
   const getInitials = (name: string) => {
@@ -28,7 +28,11 @@ export default function ProjectsClient({ user, initialProjects }: { user: any, i
       });
       if (res.ok) {
         const project = await res.json();
-        router.push(`/wizard/${project.id}/upload`);
+        if (newProjectData.entryPath === 'requirements-first') {
+          router.push(`/wizard/${project.id}/requirements`);
+        } else {
+          router.push(`/wizard/${project.id}/upload`);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -111,6 +115,17 @@ export default function ProjectsClient({ user, initialProjects }: { user: any, i
                                       <option value="Private">Private (Only Me)</option>
                                       <option value="Team">Team (Data Engineering)</option>
                                       <option value="Organization">Organization (All)</option>
+                                  </select>
+                              </div>
+                              <div>
+                                  <label style={{ fontSize: '0.8125rem', color: 'var(--color-white-muted)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><GitBranch size={14}/> Entry Path</label>
+                                  <select 
+                                    value={newProjectData.entryPath}
+                                    onChange={(e) => setNewProjectData({...newProjectData, entryPath: e.target.value})}
+                                    style={{ width: '100%', padding: '12px', background: 'var(--color-black)', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-white)', outline: 'none' }}
+                                  >
+                                      <option value="data-first">Data-First (I have data)</option>
+                                      <option value="requirements-first">Requirements-First (I have context)</option>
                                   </select>
                               </div>
                           </div>

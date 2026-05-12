@@ -29,13 +29,7 @@ export default function BusMatrixPage() {
             setMatrix(parsed.busMatrix.matrix || []);
             setLoading(false);
           } else {
-            // Need to generate it
-            const genRes = await fetch(`/api/projects/${projectId}/bus-matrix/generate`, { method: 'POST' });
-            if (genRes.ok) {
-              const genData = await genRes.json();
-              setDimensions(genData.dimensions || []);
-              setMatrix(genData.matrix || []);
-            }
+            // Empty state
             setLoading(false);
           }
         }
@@ -180,7 +174,30 @@ export default function BusMatrixPage() {
             </div>
 
             {/* Matrix Grid */}
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflowX: 'auto', minHeight: '300px', position: 'relative' }}>
+                {dimensions.length === 0 && matrix.length === 0 ? (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px', zIndex: 10, background: 'var(--color-black-light)' }}>
+                        <div style={{ textAlign: 'center' }}>
+                            <h2 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--color-white)' }}>No bus matrix generated yet.</h2>
+                            <p style={{ color: 'var(--color-white-muted)', fontSize: '0.875rem', maxWidth: '400px' }}>You can create one manually, or generate one automatically from your requirements.</p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '16px' }}>
+                            <button onClick={addProcess} className="btn-secondary" style={{ padding: '10px 20px', borderRadius: '6px' }}>Start from Scratch</button>
+                            <button onClick={async () => {
+                                setLoading(true);
+                                try {
+                                    const genRes = await fetch(`/api/projects/${projectId}/bus-matrix/generate`, { method: 'POST' });
+                                    if (genRes.ok) {
+                                        const genData = await genRes.json();
+                                        setDimensions(genData.dimensions || []);
+                                        setMatrix(genData.matrix || []);
+                                    }
+                                } catch(e) { console.error(e) }
+                                setLoading(false);
+                            }} className="btn-primary" style={{ padding: '10px 20px', borderRadius: '6px', background: 'var(--color-green)', color: '#000', border: 'none', fontWeight: 600 }}>Generate via AI</button>
+                        </div>
+                    </div>
+                ) : null}
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr>

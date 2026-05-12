@@ -6,13 +6,12 @@ import { signOut } from 'next-auth/react';
 import { Box, Settings, Database, FolderGit2, Activity, ChevronRight, LayoutDashboard, TerminalSquare, LogOut } from 'lucide-react';
 
 const steps = [
-  { id: 'upload', label: 'Ingest Data' },
-  { id: 'profile', label: 'Profiling' },
-  { id: 'requirements', label: 'Requirements' },
-  { id: 'bus-matrix', label: 'Bus Matrix' },
-  { id: 'review', label: 'Schema Editor' },
-  { id: 'export', label: 'Code Gen' },
-  { id: 'deploy', label: 'Deploy' },
+  { id: 'upload', label: 'Data', fullLabel: 'Ingest Data' },
+  { id: 'profile', label: 'Profiling', fullLabel: 'Data Profiling' },
+  { id: 'requirements', label: 'Requirements', fullLabel: 'Business Requirements' },
+  { id: 'bus-matrix', label: 'Bus Matrix', fullLabel: 'Bus Matrix' },
+  { id: 'review', label: 'Schema Editor', fullLabel: 'Schema Editor' },
+  { id: 'export', label: 'Code Gen', fullLabel: 'Code Generation' },
 ];
 
 export default function WizardLayoutClient({
@@ -63,45 +62,43 @@ export default function WizardLayoutClient({
           <Link href="/projects" style={{ color: 'var(--color-white-muted)', textDecoration: 'none' }}>{project.name}</Link>
           <span style={{ color: 'var(--color-white-muted)' }}>/</span>
           
-          {/* Subtle Breadcrumb Steps */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+          {/* Workspace Tabs */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', height: '100%', gap: '2px', marginLeft: '24px' }}>
             {steps.map((step, idx) => {
               const completedSteps = project.state?.completedSteps ? JSON.parse(project.state.completedSteps) : [];
-              const isCompleted = completedSteps.includes(step.id);
+              const hasKnowledge = completedSteps.includes(step.id);
               const isCurrent = idx === activeIndex;
-              const isLocked = !isCompleted && !isCurrent && idx > activeIndex;
 
               return (
-                <React.Fragment key={step.id}>
-                  {isLocked ? (
-                    <span style={{
-                      color: 'var(--color-white-muted)',
-                      opacity: 0.4,
-                      fontWeight: 400,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontSize: '0.8125rem',
-                      cursor: 'not-allowed'
-                    }}>
-                      {step.label}
-                    </span>
-                  ) : (
-                    <Link href={`/wizard/${projectId}/${step.id}`} style={{
-                      color: isCurrent ? 'var(--color-green)' : (isCompleted || idx < activeIndex ? 'var(--color-white)' : 'var(--color-white-muted)'),
-                      fontWeight: isCurrent ? 500 : 400,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      textDecoration: 'none',
-                      fontSize: '0.8125rem'
-                    }}>
-                      {isCurrent && <div style={{width: 6, height: 6, borderRadius: '50%', background: 'var(--color-green)'}} />}
-                      {step.label}
-                    </Link>
-                  )}
-                  {idx < steps.length - 1 && <ChevronRight size={14} color="var(--color-white-muted)" opacity={0.3} />}
-                </React.Fragment>
+                <Link key={step.id} href={`/wizard/${projectId}/${step.id}`} style={{
+                  padding: '8px 16px',
+                  background: isCurrent ? 'var(--color-black-light)' : 'transparent',
+                  borderTop: isCurrent ? '2px solid var(--color-green)' : '2px solid transparent',
+                  borderLeft: isCurrent ? '1px solid var(--color-border)' : '1px solid transparent',
+                  borderRight: isCurrent ? '1px solid var(--color-border)' : '1px solid transparent',
+                  color: isCurrent ? 'var(--color-white)' : 'var(--color-white-muted)',
+                  fontWeight: isCurrent ? 500 : 400,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  textDecoration: 'none',
+                  fontSize: '0.8125rem',
+                  borderTopLeftRadius: '4px',
+                  borderTopRightRadius: '4px',
+                  height: '100%',
+                  transition: 'all 0.2s ease',
+                  opacity: isCurrent ? 1 : 0.7
+                }}>
+                  <div style={{
+                    width: '8px', 
+                    height: '8px', 
+                    borderRadius: '50%', 
+                    background: hasKnowledge ? 'var(--color-green)' : 'transparent',
+                    border: hasKnowledge ? 'none' : '1px solid var(--color-white-muted)',
+                    opacity: hasKnowledge ? 1 : 0.5
+                  }} title={hasKnowledge ? "Knowledge Contributed" : "No Knowledge Yet"} />
+                  {step.label}
+                </Link>
               );
             })}
           </div>

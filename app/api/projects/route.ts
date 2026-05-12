@@ -11,7 +11,7 @@ export async function POST(req: Request) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { name, access, repo } = await req.json();
+    const { name, access, repo, entryPath } = await req.json();
 
     if (!name) {
       return new NextResponse('Missing project name', { status: 400 });
@@ -37,6 +37,16 @@ export async function POST(req: Request) {
         repo,
         creatorId: user.id,
         organizationId,
+      }
+    });
+
+    // Initialize Knowledge Context based on Phase 2
+    await prisma.projectState.create({
+      data: {
+        projectId: project.id,
+        currentStep: entryPath === 'requirements-first' ? 'requirements' : 'upload',
+        completedSteps: '[]',
+        stateData: JSON.stringify({ entryPath: entryPath || 'data-first' })
       }
     });
 

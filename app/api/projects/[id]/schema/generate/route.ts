@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { askClaude } from '@/lib/bedrock';
 import { PROMPTS } from '@/lib/prompts';
 import { extractJSON } from '@/lib/markdown';
+import { getKnowledge, updateKnowledge } from '@/lib/knowledge';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -15,19 +16,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const projectState = await prisma.projectState.findUnique({ where: { projectId: id } });
-    if (!projectState) return new NextResponse('Project state not found', { status: 404 });
-
-    const stateData = JSON.parse(projectState.stateData || "{}");
+    const knowledge = await getKnowledge(id);
     
-    const busMatrix = stateData.busMatrix;
+    const busMatrix = knowledge.busMatrix;
     if (!busMatrix) {
         return new NextResponse('Bus Matrix not found. Complete previous step.', { status: 400 });
     }
 
     // Build context
-    const requirements = stateData.kpis ? JSON.stringify(stateData.kpis) : 'No explicit KPIs defined.';
-    const profilingContext = stateData.profileResults ? JSON.stringify(stateData.profileResults) : 'No profiling data available.';
+    const requirements = knowledge.kpis ? JSON.stringify(knowledge.kpis) : 'No explicit KPIs defined.';
+    const profilingContext = knowledge.profileResults ? JSON.stringify(knowledge.profileResults) : 'No profiling data available.';
     const matrixContext = JSON.stringify(busMatrix);
     
     const systemPrompt = `${PROMPTS.SCHEMA_GENERATOR}
@@ -97,26 +95,22 @@ ${profilingContext}
                 source: e.target, // ReactFlow connects from Parent(Dim) to Child(Fact) typically, but either works
                 target: e.source,
                 animated: true,
+                label: e.cardinality || '1:M',
+                labelBgStyle: { fill: '#1a1a1a', color: '#fff' },
+                labelStyle: { fill: '#fff', fontWeight: 700, fontSize: 12 },
                 style: { stroke: 'rgba(255,255,255,0.3)', strokeWidth: 2 }
             });
         });
     }
 
-    stateData.schema = { nodes, edges };
-
-    // Record schema generation in memory history
-    if (!stateData.schemaHistory) stateData.schemaHistory = [];
-    stateData.schemaHistory.push({
+    const newSchemaHistory = [...(knowledge.schemaHistory || []), {
         timestamp: new Date().toISOString(),
         schema: { nodes, edges }
-    });
+    }];
 
-    await prisma.projectState.update({
-        where: { projectId: id },
-        data: { stateData: JSON.stringify(stateData) }
-    });
+    await updateKnowledge(id, { schema: { nodes, edges }, schemaHistory: newSchemaHistory });
 
-    return NextResponse.json(stateData.schema);
+    return NextResponse.json({ nodes, edges });
   } catch (error: any) {
     console.error(error);
     return new NextResponse(error?.message || 'Internal Error', { status: 500 });

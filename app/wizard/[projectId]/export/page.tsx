@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowRight, Code, Download, FileJson, CheckCircle2, Copy, Terminal, ChevronRight, Folder, Loader2 } from 'lucide-react';
+import { ArrowRight, Code, Download, FileJson, FileText, CheckCircle2, Copy, Terminal, ChevronRight, Folder, Loader2 } from 'lucide-react';
+import { renderAIResponse } from '@/lib/markdown';
 
 export default function ExportPage() {
   const { projectId } = useParams() as { projectId: string };
@@ -81,7 +82,7 @@ export default function ExportPage() {
                              borderLeft: activeFile?.name === file.name ? '2px solid var(--color-green)' : '2px solid transparent'
                          }}
                        >
-                         {file.type === 'sql' ? <Code size={14} /> : <FileJson size={14} />} {file.name}
+                         {file.type === 'sql' ? <Code size={14} /> : file.type === 'md' ? <FileText size={14} /> : <FileJson size={14} />} {file.name}
                        </div>
                    ))}
                 </div>
@@ -104,7 +105,7 @@ export default function ExportPage() {
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', height: '40px', justifyContent: 'space-between', alignItems: 'center', paddingRight: '16px' }}>
                    <div style={{ padding: '0 16px', borderRight: '1px solid var(--color-border)', borderTop: '2px solid var(--color-green)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem', background: '#0a0a0a', height: '100%' }}>
-                     {activeFile?.type === 'sql' ? <Code size={14} color="var(--color-green)" /> : <FileJson size={14} color="var(--color-green)" />} {activeFile?.name}
+                     {activeFile?.type === 'sql' ? <Code size={14} color="var(--color-green)" /> : activeFile?.type === 'md' ? <FileText size={14} color="var(--color-green)" /> : <FileJson size={14} color="var(--color-green)" />} {activeFile?.name}
                    </div>
                    <button onClick={copyToClipboard} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
                       <Copy size={12} /> Copy Code
@@ -117,13 +118,17 @@ export default function ExportPage() {
                      {activeFile?.content.split('\n').map((_, i) => <div key={i}>{i+1}</div>)}
                    </div>
                    {/* Code content */}
-                   <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.875rem', lineHeight: 1.5, color: '#e0e0e0', flex: 1, overflowX: 'auto', paddingRight: '16px' }}>
-                    <code>
-                      {activeFile?.content.split('\n').map((line, i) => (
-                        <div key={i} dangerouslySetInnerHTML={{ __html: line.replace(/\{\{/g, '<span style="color: #ffbd2e">{{').replace(/\}\}/g, '}}</span>').replace(/(SELECT|FROM|WITH|AS|CAST)/g, '<span style="color: #c678dd">$1</span>') }} />
-                      ))}
-                    </code>
-                   </pre>
+                   {activeFile?.type === 'md' ? (
+                       <div style={{ padding: '0 16px', color: '#e0e0e0', fontSize: '0.875rem', lineHeight: 1.6, flex: 1, overflowX: 'auto', fontFamily: 'sans-serif' }} dangerouslySetInnerHTML={{ __html: renderAIResponse(activeFile.content) }} />
+                   ) : (
+                       <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.875rem', lineHeight: 1.5, color: '#e0e0e0', flex: 1, overflowX: 'auto', paddingRight: '16px' }}>
+                        <code>
+                          {activeFile?.content.split('\n').map((line, i) => (
+                            <div key={i} dangerouslySetInnerHTML={{ __html: line.replace(/\{\{/g, '<span style="color: #ffbd2e">{{').replace(/\}\}/g, '}}</span>').replace(/(SELECT|FROM|WITH|AS|CAST)/g, '<span style="color: #c678dd">$1</span>') }} />
+                          ))}
+                        </code>
+                       </pre>
+                   )}
                 </div>
               </div>
 

@@ -2,8 +2,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Database, Settings2, Trash2, Edit2, Loader2, Bot, Send } from 'lucide-react';
+import { ArrowRight, Plus, Database, Settings2, Trash2, Edit2, Loader2, Bot, Send, Image as ImageIcon } from 'lucide-react';
 import { renderAIResponse } from '@/lib/markdown';
+import { toPng } from 'html-to-image';
 import { ReactFlow, Background, Controls, Handle, Position, useNodesState, useEdgesState, addEdge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -102,6 +103,43 @@ export default function ReviewPage() {
     }));
   }, []);
 
+  const layoutStarSchema = useCallback((nodesToLayout: any[], currentEdges: any[]) => {
+    const factNodes = nodesToLayout.filter((n: any) => n.type === 'factNode');
+    const dimNodes = nodesToLayout.filter((n: any) => n.type === 'dimNode');
+    
+    let yOffset = 250;
+    
+    factNodes.forEach((fact: any) => {
+      fact.position = { x: 500, y: yOffset };
+      
+      const connectedEdges = currentEdges.filter((e: any) => e.source === fact.id || e.target === fact.id);
+      const connectedDimIds = connectedEdges.map((e: any) => e.source === fact.id ? e.target : e.source);
+      const factDims = dimNodes.filter((d: any) => connectedDimIds.includes(d.id));
+      
+      const angleStep = Math.PI / (factDims.length + 1);
+      
+      factDims.forEach((dim: any, j: number) => {
+        if (dim.hasBeenPositioned) {
+          dim.position = { x: 500 - 350, y: yOffset - 200 }; // shared dims positioned to the side
+        } else {
+          const angle = angleStep * (j + 1) - Math.PI / 2;
+          const radius = 350;
+          dim.position = {
+            x: 500 + Math.cos(angle) * radius,
+            y: yOffset + Math.sin(angle) * radius
+          };
+          dim.hasBeenPositioned = true;
+        }
+      });
+      
+      yOffset += 450;
+    });
+
+    dimNodes.forEach((dim: any) => delete dim.hasBeenPositioned);
+
+    return [...nodesToLayout];
+  }, []);
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -111,16 +149,15 @@ export default function ReviewPage() {
           const parsed = JSON.parse(data.stateData || '{}');
           
           if (parsed.schema) {
-            setNodes(bindNodeMethods(parsed.schema.nodes));
+            let loadedNodes = parsed.schema.nodes;
+            if (loadedNodes.every((n: any) => !n.position || (n.position.x === 0 && n.position.y === 0))) {
+                loadedNodes = layoutStarSchema(loadedNodes, parsed.schema.edges);
+            }
+            setNodes(bindNodeMethods(loadedNodes));
             setEdges(parsed.schema.edges);
             setLoading(false);
           } else {
-            const genRes = await fetch(`/api/projects/${projectId}/schema/generate`, { method: 'POST' });
-            if (genRes.ok) {
-              const genData = await genRes.json();
-              setNodes(bindNodeMethods(genData.nodes));
-              setEdges(genData.edges);
-            }
+            // Empty state
             setLoading(false);
           }
         }
@@ -164,11 +201,35 @@ export default function ReviewPage() {
 
   const onConnect = useCallback((params: any) => {
     setEdges((eds) => {
-        const newEdges = addEdge({ ...params, animated: true, style: { stroke: 'rgba(255,255,255,0.3)', strokeWidth: 2 } }, eds);
+        const newEdges = addEdge({ 
+          ...params, 
+          animated: true, 
+          style: { stroke: 'rgba(255,255,255,0.3)', strokeWidth: 2 },
+          label: '1:M',
+          labelBgStyle: { fill: '#1a1a1a', color: '#fff' },
+          labelStyle: { fill: '#fff', fontWeight: 700, fontSize: 12 }
+        }, eds);
         saveSchema(nodes, newEdges);
         return newEdges;
     });
   }, [nodes]);
+
+  const onEdgeClick = (event: React.MouseEvent, edge: any) => {
+    event.stopPropagation();
+    const newCard = prompt('Enter cardinality (e.g. 1:M, 1:1, M:M):', edge.label || '1:M');
+    if (newCard !== null) {
+      setEdges(eds => {
+        const updated = eds.map(e => {
+          if (e.id === edge.id) {
+            return { ...e, label: newCard, labelBgStyle: { fill: '#1a1a1a', color: '#fff' }, labelStyle: { fill: '#fff', fontWeight: 700, fontSize: 12 } };
+          }
+          return e;
+        });
+        saveSchema(nodes, updated);
+        return updated;
+      });
+    }
+  };
 
   const onNodeClick = (event: any, node: any) => {
     setSelectedTable(node);
@@ -282,7 +343,8 @@ export default function ReviewPage() {
               const data = await res.json();
               setChatLog([...newLog, { role: 'assistant', content: data.response }]);
               if (data.schema) {
-                  setNodes(bindNodeMethods(data.schema.nodes));
+                  const laidOutNodes = layoutStarSchema(data.schema.nodes, data.schema.edges);
+                  setNodes(bindNodeMethods(laidOutNodes));
                   setEdges(data.schema.edges);
               }
           }
@@ -315,6 +377,17 @@ export default function ReviewPage() {
     }
   };
 
+  const handleExportImage = () => {
+    const element = document.querySelector('.react-flow') as HTMLElement;
+    if (!element) return;
+    toPng(element, { backgroundColor: '#080808' }).then(dataUrl => {
+      const a = document.createElement('a');
+      a.setAttribute('download', 'dimwiz_schema.png');
+      a.setAttribute('href', dataUrl);
+      a.click();
+    }).catch(e => console.error("Export failed", e));
+  };
+
   if (loading) {
       return (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
@@ -339,6 +412,31 @@ export default function ReviewPage() {
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           {saving && <span style={{ fontSize: '0.75rem', color: 'var(--color-white-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}><Loader2 size={12} className="spin-icon" /> Saving...</span>}
+          <button onClick={handleExportImage} className="btn-secondary" style={{ padding: '6px 12px', gap: '8px', display: 'flex', fontSize: '0.8125rem' }}>
+             <ImageIcon size={14} /> Export PNG
+          </button>
+          <button onClick={async () => {
+              setLoading(true);
+              try {
+                  const genRes = await fetch(`/api/projects/${projectId}/schema/generate`, { method: 'POST' });
+                  if (genRes.ok) {
+                      const genData = await genRes.json();
+                      const laidOutNodes = layoutStarSchema(genData.nodes, genData.edges);
+                      setNodes(bindNodeMethods(laidOutNodes));
+                      setEdges(genData.edges);
+                  }
+              } catch(e) { console.error(e) }
+              setLoading(false);
+          }} className="btn-secondary" style={{ padding: '6px 12px', gap: '8px', display: 'flex', fontSize: '0.8125rem', borderColor: 'var(--color-green)', color: 'var(--color-green)' }}>
+             <Bot size={14} /> AI Generate
+          </button>
+          <button onClick={() => {
+              const newNodes = layoutStarSchema(nodes, edges);
+              setNodes([...newNodes]);
+              saveSchema(newNodes, edges);
+          }} className="btn-secondary" style={{ padding: '6px 12px', gap: '8px', display: 'flex', fontSize: '0.8125rem' }}>
+             Re-layout
+          </button>
           <button onClick={addCustomTable} className="btn-secondary" style={{ padding: '6px 12px', gap: '8px', display: 'flex', fontSize: '0.8125rem' }}>
              <Plus size={14}/> Add Custom Table
           </button>
@@ -352,6 +450,30 @@ export default function ReviewPage() {
         
         {/* Canvas Area / YAML View */}
         <div style={{ flex: 1, position: 'relative', background: '#080808', borderRight: '1px solid var(--color-border)' }}>
+            {nodes.length === 0 ? (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px', zIndex: 10, background: '#0a0a0a' }}>
+                    <div style={{ textAlign: 'center' }}>
+                        <h2 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--color-white)' }}>No schema generated yet.</h2>
+                        <p style={{ color: 'var(--color-white-muted)', fontSize: '0.875rem', maxWidth: '400px' }}>You can sketch a model manually, or complete Profiling & Requirements to auto-generate one.</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '16px' }}>
+                        <button onClick={addCustomTable} className="btn-secondary" style={{ padding: '10px 20px', borderRadius: '6px' }}>Start from Scratch</button>
+                        <button onClick={async () => {
+                            setLoading(true);
+                            try {
+                                const genRes = await fetch(`/api/projects/${projectId}/schema/generate`, { method: 'POST' });
+                                if (genRes.ok) {
+                                    const genData = await genRes.json();
+                                    const laidOutNodes = layoutStarSchema(genData.nodes, genData.edges);
+                                    setNodes(bindNodeMethods(laidOutNodes));
+                                    setEdges(genData.edges);
+                                }
+                            } catch(e) { console.error(e) }
+                            setLoading(false);
+                        }} className="btn-primary" style={{ padding: '10px 20px', borderRadius: '6px', background: 'var(--color-green)', color: '#000', border: 'none', fontWeight: 600 }}>Generate via AI</button>
+                    </div>
+                </div>
+            ) : null}
             {viewMode === 'visual' ? (
                 <ReactFlow
                     nodes={nodes}
@@ -360,6 +482,7 @@ export default function ReviewPage() {
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
                     onNodeClick={onNodeClick}
+                    onEdgeClick={onEdgeClick}
                     onPaneClick={() => setSelectedTable(null)}
                     nodeTypes={nodeTypes}
                     fitView

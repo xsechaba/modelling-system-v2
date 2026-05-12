@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { askClaude } from '@/lib/bedrock';
 import { PROMPTS } from '@/lib/prompts';
 import { extractJSON } from '@/lib/markdown';
+import { getKnowledge, updateKnowledge } from '@/lib/knowledge';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -15,14 +15,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const projectState = await prisma.projectState.findUnique({ where: { projectId: id } });
-    if (!projectState) return new NextResponse('Project state not found', { status: 404 });
-
-    const stateData = JSON.parse(projectState.stateData || "{}");
+    const knowledge = await getKnowledge(id);
     
     // Build context
-    const requirements = stateData.kpis ? JSON.stringify(stateData.kpis) : 'No explicit KPIs defined.';
-    const profilingContext = stateData.profileResults ? JSON.stringify(stateData.profileResults) : 'No profiling data available.';
+    const requirements = knowledge.kpis ? JSON.stringify(knowledge.kpis) : 'No explicit KPIs defined.';
+    const profilingContext = knowledge.profileResults ? JSON.stringify(knowledge.profileResults) : 'No profiling data available.';
     
     const systemPrompt = `${PROMPTS.BUS_MATRIX_GENERATOR}
     
@@ -52,11 +49,7 @@ ${profilingContext}
     }
 
     // Save to state
-    stateData.busMatrix = matrixData;
-    await prisma.projectState.update({
-        where: { projectId: id },
-        data: { stateData: JSON.stringify(stateData) }
-    });
+    await updateKnowledge(id, { busMatrix: matrixData });
 
     return NextResponse.json(matrixData);
   } catch (error: any) {
