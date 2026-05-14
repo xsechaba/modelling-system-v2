@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { chatWithClaude } from '@/lib/bedrock';
 import { PROMPTS } from '@/lib/prompts';
 import { extractJSON } from '@/lib/markdown';
+import { mergeRequirements } from '@/lib/requirements'; // Assuming I should create this or define it here
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -57,7 +58,15 @@ ${aiInterpretation}
       aiResponse = extractionResult.remainingText;
       const extractedData = extractionResult.json;
       
-      // Merge KPIs
+      // Handle Banked Requirements (New Structure)
+      if (Array.isArray(extractedData)) {
+         // If extractedData is directly an array (from ---BANKED_REQUIREMENTS---)
+         stateData.bankedRequirements = mergeRequirements(stateData.bankedRequirements || [], extractedData);
+      } else if (extractedData.bankedRequirements && Array.isArray(extractedData.bankedRequirements)) {
+         stateData.bankedRequirements = mergeRequirements(stateData.bankedRequirements || [], extractedData.bankedRequirements);
+      }
+
+      // Handle Legacy KPIs (Compatibility)
       if (extractedData.kpis && Array.isArray(extractedData.kpis)) {
          const newKPIs = extractedData.kpis.map((k: any) => ({
            id: Date.now().toString() + Math.random().toString(),
@@ -68,6 +77,7 @@ ${aiInterpretation}
          
          const newKpisFiltered = newKPIs.filter((nk: any) => !existingKPIs.some((ek: any) => ek.name === nk.name));
          existingKPIs = [...existingKPIs, ...newKpisFiltered];
+         stateData.kpis = existingKPIs;
       }
     }
 
@@ -86,7 +96,8 @@ ${aiInterpretation}
     return NextResponse.json({ 
         response: aiResponse, 
         chatHistory,
-        kpis: existingKPIs
+        kpis: stateData.kpis || [],
+        bankedRequirements: stateData.bankedRequirements || []
     });
   } catch (error: any) {
     console.error(error);

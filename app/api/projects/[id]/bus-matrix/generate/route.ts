@@ -17,18 +17,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const knowledge = await getKnowledge(id);
     
-    // Build context
-    const requirements = knowledge.kpis ? JSON.stringify(knowledge.kpis) : 'No explicit KPIs defined.';
+    // Build context - prioritize banked requirements
+    const bankedReqs = knowledge.bankedRequirements ? JSON.stringify(knowledge.bankedRequirements) : 'No banked requirements available.';
     const profilingContext = knowledge.profileResults ? JSON.stringify(knowledge.profileResults) : 'No profiling data available.';
     
     const systemPrompt = `${PROMPTS.BUS_MATRIX_GENERATOR}
     
-=== GATHERED REQUIREMENTS (KPIs) ===
-${requirements}
-
-=== UPLOADED DATA PROFILING CONTEXT ===
-${profilingContext}
-`;
+    === BANKED REQUIREMENTS (INPUT) ===
+    ${bankedReqs}
+    
+    === SOURCE DATA PROFILING (CONTEXT) ===
+    ${profilingContext}
+    `;
 
     // Call AWS Bedrock for real generation
     const rawAiResponse = await askClaude(systemPrompt, 'Generate the bus matrix now.');

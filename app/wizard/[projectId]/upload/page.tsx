@@ -27,13 +27,10 @@ export default function UploadPage() {
   const [alreadyProfiled, setAlreadyProfiled] = useState(false);
   const [loadingState, setLoadingState] = useState(true);
 
-  const [dbTables, setDbTables] = useState([
-    { name: 'public.users', selected: true },
-    { name: 'public.transactions', selected: true },
-    { name: 'public.stores', selected: true },
-    { name: 'audit.logs', selected: false },
-    { name: 'staging.raw_events', selected: false }
-  ]);
+  const [dbTables, setDbTables] = useState<{name: string, selected: boolean}[]>([]);
+  const [dbCreds, setDbCreds] = useState({ host: '', port: '5432', database: '', user: '', password: '' });
+  const [dbConnecting, setDbConnecting] = useState(false);
+  const [dbError, setDbError] = useState('');
 
   const { projectId } = useParams() as { projectId: string };
 
@@ -118,6 +115,72 @@ export default function UploadPage() {
     const newTables = [...dbTables];
     newTables[index].selected = !newTables[index].selected;
     setDbTables(newTables);
+  };
+
+  const handleConnectDb = async () => {
+    setDbConnecting(true);
+    setDbError('');
+    try {
+      const res = await fetch('/api/db-connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dbCreds)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Connection failed');
+      
+      setDbTables(data.tables.map((t: any) => ({ name: t.name, selected: false })));
+      setDbConnected(true);
+    } catch (err: any) {
+      setDbError(err.message);
+    } finally {
+      setDbConnecting(false);
+    }
+  };
+
+  const handleImportDbTables = async () => {
+    const selected = dbTables.filter(t => t.selected).map(t => t.name);
+    if (selected.length === 0) return;
+
+    setProfiling(true);
+    setDbError('');
+    
+    try {
+      const res = await fetch('/api/profile-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...dbCreds, selectedTables: selected })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Profiling failed');
+
+      // Add to uploaded files list for UI consistency
+      const newFiles = data.files.map((f: any) => ({
+        name: f.name,
+        size: f.size + ' B', // Pseudo size
+        status: 'done' as const
+      }));
+      setUploadedFiles(prev => [...prev, ...newFiles]);
+
+      await fetch(`/api/projects/${projectId}/state`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentStep: 'profile',
+          completedSteps: ['upload'],
+          stateData: {
+            profileResults: data,
+            uploadedFiles: [...uploadedFiles, ...newFiles].map(f => ({ name: f.name, size: f.size }))
+          }
+        })
+      });
+
+      setAlreadyProfiled(true);
+      setTimeout(() => router.push(`/wizard/${projectId}/profile`), 400);
+    } catch (err: any) {
+      setDbError(err.message);
+      setProfiling(false);
+    }
   };
 
   const handleRunProfiler = async () => {
@@ -382,26 +445,32 @@ export default function UploadPage() {
                               </div>
                               <div>
                                   <label style={{ display: 'block', marginBottom: '4px', color: 'var(--color-white-muted)' }}>Host</label>
-                                  <input type="text" placeholder="db.internal.example.com" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
+                                  <input type="text" value={dbCreds.host} onChange={e => setDbCreds(prev => ({...prev, host: e.target.value}))} placeholder="db.internal.example.com" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
                               </div>
                               <div style={{ display: 'flex', gap: '12px' }}>
                                   <div style={{ flex: 1 }}>
                                       <label style={{ display: 'block', marginBottom: '4px', color: 'var(--color-white-muted)' }}>Port</label>
-                                      <input type="text" placeholder="5432" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
+                                      <input type="text" value={dbCreds.port} onChange={e => setDbCreds(prev => ({...prev, port: e.target.value}))} placeholder="5432" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
                                   </div>
                                   <div style={{ flex: 1 }}>
                                       <label style={{ display: 'block', marginBottom: '4px', color: 'var(--color-white-muted)' }}>Database</label>
-                                      <input type="text" placeholder="analytics_prod" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
+                                      <input type="text" value={dbCreds.database} onChange={e => setDbCreds(prev => ({...prev, database: e.target.value}))} placeholder="analytics_prod" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
                                   </div>
                               </div>
                               <div>
-                                  <label style={{ display: 'block', marginBottom: '4px', color: 'var(--color-white-muted)' }}>Username / Role</label>
-                                  <input type="text" placeholder="service_account" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
+                                  <label style={{ display: 'block', marginBottom: '4px', color: 'var(--color-white-muted)' }}>Username</label>
+                                  <input type="text" value={dbCreds.user} onChange={e => setDbCreds(prev => ({...prev, user: e.target.value}))} placeholder="service_account" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
                               </div>
+                              <div>
+                                  <label style={{ display: 'block', marginBottom: '4px', color: 'var(--color-white-muted)' }}>Password</label>
+                                  <input type="password" value={dbCreds.password} onChange={e => setDbCreds(prev => ({...prev, password: e.target.value}))} placeholder="••••••••" style={{ width: '100%', background: '#111', border: '1px solid var(--color-border)', color: '#fff', padding: '8px', borderRadius: '4px', outline: 'none' }} />
+                              </div>
+                              {dbError && <div style={{ color: '#ff5f56', fontSize: '0.75rem' }}>{dbError}</div>}
                               <button 
-                                onClick={() => setDbConnected(true)}
-                                style={{ background: 'var(--color-green)', color: '#000', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', marginTop: '8px' }}>
-                                  Test & Connect
+                                onClick={handleConnectDb}
+                                disabled={dbConnecting}
+                                style={{ background: 'var(--color-green)', color: '#000', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', marginTop: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                                  {dbConnecting ? <><Loader2 size={14} className="spin-icon"/> Connecting...</> : 'Test & Connect'}
                               </button>
                           </div>
                       </div>
@@ -425,10 +494,13 @@ export default function UploadPage() {
                               ))}
                           </div>
 
+                          {dbError && <div style={{ color: '#ff5f56', fontSize: '0.75rem', marginTop: '8px' }}>{dbError}</div>}
+
                           <button 
-                            onClick={() => setDbConnected(false)}
-                            style={{ width: '100%', background: '#fff', color: '#000', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', marginTop: '16px' }}>
-                              Import Selected Tables
+                            onClick={handleImportDbTables}
+                            disabled={profiling || !dbTables.some(t => t.selected)}
+                            style={{ width: '100%', background: '#fff', color: '#000', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 600, cursor: 'pointer', marginTop: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                              {profiling ? <><Loader2 size={14} className="spin-icon"/> Profiling...</> : 'Import Selected Tables'}
                           </button>
                       </div>
                   )}

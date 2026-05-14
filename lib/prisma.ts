@@ -1,3 +1,4 @@
+// lib/prisma.ts - Prisma Client Singleton
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {

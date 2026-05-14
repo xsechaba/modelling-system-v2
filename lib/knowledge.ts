@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { BankedRequirement } from './requirements';
 
 export interface FileMetadata {
   filename: string;
@@ -36,6 +37,7 @@ export interface KnowledgeContext {
 
   // Business knowledge
   chatHistory?: { role: string, content: string }[];
+  bankedRequirements?: BankedRequirement[];
   kpis?: KPI[];
   dimensions?: DimensionSpec[];
   businessRules?: BusinessRule[];
@@ -106,6 +108,10 @@ export async function getKnowledgeSummary(projectId: string): Promise<string> {
     summary += `- Uploaded Data: ${k.uploadedFiles.length} files (${k.uploadedFiles.map(f => f.filename).join(', ')})\n`;
   } else {
     summary += `- Uploaded Data: None\n`;
+  }
+
+  if (k.bankedRequirements && k.bankedRequirements.length > 0) {
+    summary += `- Banked Requirements: ${k.bankedRequirements.length} (${k.bankedRequirements.map(r => r.name).join(', ')})\n`;
   }
 
   if (k.kpis && k.kpis.length > 0) {

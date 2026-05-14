@@ -1,426 +1,169 @@
-# Dim-Wiz Platform — Master Roadmap
+# Dim-Wiz Platform — Development Roadmap
 
-> **Date:** 11 May 2026
+> **Date:** 13 May 2026
 > **Author:** Sechaba
-> **Status:** Planning — Awaiting Review
+> **Status:** Active — Post May 12 Check-in with Neil Lategan
+> **Focus:** UI & Workflow Changes (not backend infrastructure)
 
 ---
 
-## Executive Summary
+## Context
 
-The Dim-Wiz platform is a working prototype that can ingest CSV data, profile it, interview the user for requirements, generate a Bus Matrix, architect a visual star schema, and produce dbt-style code output. All AI agents run on Claude via AWS Bedrock, and the app uses Next.js + Prisma + SQLite locally.
+Following the May 12 Capstone Check-In, the immediate priority is **UI and workflow improvements** to the core modelling flow. Backend infrastructure work (S3, RDS, GitHub) is explicitly deferred. This roadmap only contains outstanding work — everything already implemented has been removed.
 
-The most recent feedback session with Neil and Heinrich confirmed two things:
+### What's Already Working
 
-1. **The platform has real value.** Heinrich specifically said he sees a direct use case for this in real client consulting work — speeding up data model development and review.
-2. **The current structure is too rigid.** The linear wizard flow (Ingest → Profile → Requirements → Bus Matrix → Schema → Code → Deploy) needs to become modular, where each step contributes knowledge to a shared context, and the user can enter from multiple starting points.
+The following are built and functional:
 
-This roadmap is divided into **four phases** that balance finishing what's already in progress with implementing the structural changes required by the feedback.
+- ✅ Auth (NextAuth + credentials), login, registration, sessions
+- ✅ Project creation & dashboard with "data-first" vs "requirements-first" entry path
+- ✅ CSV upload & ingestion (drag-and-drop, multi-file)
+- ✅ Data profiling (deterministic, Kaggle-style stats, histograms, flags) — deemed "good enough" for clean CSVs
+- ✅ AI profile interpretation (Claude via Bedrock)
+- ✅ Requirements interview (multi-turn chat, text/markdown file upload, KPI extraction)
+- ✅ Bus Matrix (AI-generated or manual, editable grid with add/delete process/dimension)
+- ✅ Star schema editor (ReactFlow visual ERD, YAML view, AI chat modification, PNG export, re-layout, manual table/column editing, cardinality labels on edges)
+- ✅ Code generation output (dbt SQL, file explorer)
+- ✅ Shared Knowledge Store (`lib/knowledge.ts` with `KnowledgeContext` interface, `getKnowledge`, `updateKnowledge`, `getKnowledgeSummary`)
+- ✅ Modular tab navigation (all tabs unlocked, green dot knowledge indicators, no locking logic)
+- ✅ Star schema layout algorithm (`layoutStarSchema` — facts centered, dimensions in radial arc)
+
+### What's Been Deprioritized (Parked)
+
+These items were discussed but Neil explicitly said to **pause or defer**:
+
+- ⏸️ GitHub integration — Paused entirely. Focus on core modelling flow first.
+- ⏸️ S3 file storage — Files are in-memory. Can wait.
+- ⏸️ SQLite → PostgreSQL/RDS migration — Can wait.
+- ⏸️ Live database connector (Postgres profiling) — Next sprint, after UI work is done.
 
 ---
 
-## Current State — What Exists Today
+## Sprint 1 — Requirements UX Overhaul (Before Next Meeting)
 
-| Component | Status | Notes |
+> **Nature of work:** This is primarily a **UI and workflow** effort, not deep backend work. The focus is on getting the screens, flows, and structured outputs right.
+
+### Visual Inspiration
+
+Neil shared reference screenshots during the meeting. These are saved in:
+- `transcipt/image (3).png` — Knowledge Base Interactive Viewer (hierarchy panel + detail view)
+- `transcipt/image (4).png` — Process Hierarchy + Central Explorer + Logic Explorer
+- `transcipt/image (5).png` — Tabular Analytics/Testing View
+
+These are not meant to be copied exactly but should inspire the structured layout.
+
+---
+
+### 1. Restructure the Requirements Page into a Three-Pane Layout
+
+**Current state:** The requirements page (`app/wizard/[projectId]/requirements/page.tsx`) is a two-panel layout:
+- Left: Chat conversation with a file upload zone at the top
+- Right: "Extracted KPI Models" panel showing editable formula cards
+
+**What Neil wants:** A structured, multi-pane requirements workspace:
+
+| Left Pane | Center Pane | Right Pane |
 |---|---|---|
-| Auth (NextAuth + credentials) | ✅ Working | Login, registration, sessions |
-| Project creation & dashboard | ✅ Working | Create projects, resume sessions |
-| CSV upload & ingestion | ✅ Working | Drag-and-drop, multi-file |
-| Data profiling (deterministic) | ✅ Working | Kaggle-style column stats, histograms, flags |
-| AI profile interpretation | ✅ Working | Claude via Bedrock |
-| Requirements interview (chat) | ✅ Working | Multi-turn chat, doc upload, KPI extraction |
-| Bus Matrix generation | ✅ Working | AI-generated, editable grid |
-| Star schema editor (ReactFlow) | ✅ Working | Visual ERD, node editing, AI chat modification |
-| Code generation output | ✅ Working | dbt SQL output, file explorer, terminal simulation |
-| Deploy page | ⚠️ Simulated | UI present, deployment logic is mocked |
-| Live DB connector | ⚠️ UI only | Connection form exists, no actual DB connection |
-| S3 file storage | ❌ Not started | Files are handled in-memory, no persistence to S3 |
-| RDS database connection | ❌ Not started | `awsConfig` exists but no RDS client |
-| SQLite → cloud DB migration | ❌ Not started | Prisma uses local `dev.db` |
-| GitHub integration | ❌ Not started | `repo` field exists on Project model, no Git API calls |
-| Documentation export | ❌ Not started | Not yet in scope |
-| Scheduling / orchestration | ⚠️ UI only | Schedule selectors exist, no backend logic |
+| **Requirements Hierarchy** — A clickable list of all extracted requirements, organized and browsable | **Main Explorer/Editor** — The chat/document viewer. When a requirement is clicked in the left pane, its full detail appears here | **Logic/Detail Panel** — A secondary view for formulas, KPIs, and business rules |
+
+**Key changes:**
+- The left pane replaces the current implicit requirement list. Each extracted requirement should appear as a discrete, clickable item in a sidebar hierarchy.
+- Users must be able to **review, edit, delete, and reprioritize** individual requirements.
+- **Formulas demotion:** Neil said the current KPI formulas panel is "weak" as the primary right-hand output. Formulas should be **demoted** from the dominant right-side view into a secondary detail/logic explorer. They are still useful, but should not be the main thing the user sees.
+
+**File to modify:** `app/wizard/[projectId]/requirements/page.tsx`
 
 ---
 
-## Phase 1 — Complete Outstanding Backend Integrations
+### 2. Rework the Requirements Agent Prompt (Business Analyst Role)
 
-> **Goal:** Finish everything that was already planned but not yet functional, so the platform can operate end-to-end as a real tool rather than a simulation.
-> **Priority:** High — Do this first.
-> **Estimated effort:** 2–3 weeks
+**Current state:** The `REQUIREMENTS_INTERVIEWER` prompt in `lib/prompts.ts` is a general "data architect and business analyst" that conducts a requirements interview and emits a `---KPI_EXTRACT---` JSON block.
 
-### 1A. File Storage → AWS S3
+**What Neil wants:** The first agent should behave specifically as a **Business Analyst** whose job is to:
+- Extract, structure, and format requirements from uploaded context material
+- Produce a clear, organized requirements document — not just a conversation
+- Output structured "banked" requirements that can be handed off cleanly to the next stage
 
-**Why:** Currently, uploaded CSV files are processed in-memory during the profiling step and never persisted. If the user refreshes or returns later, the raw files are gone. The `UploadedFile` model already has an `s3Key` field but nothing writes to S3.
-
-**What to build:**
-- Add `@aws-sdk/client-s3` dependency
-- Create `lib/s3.ts` with `uploadFile(buffer, key)` and `getFile(key)` functions using the existing `awsConfig` from `lib/aws.ts`
-- Update the `/api/profile` route to upload each CSV to S3 before profiling
-- Store the S3 key in the `UploadedFile` table
-- Add a download/retrieval function for when files need to be re-read later
-
-**Environment variables needed:**
-```
-AWS_S3_BUCKET=dimwiz-uploads
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-```
-
-### 1B. Database → AWS RDS (PostgreSQL)
-
-**Why:** The platform currently runs on a local SQLite file (`prisma/dev.db`). This works for development but won't work for deployment, multi-user access, or any real client use.
-
-**What to build:**
-- Provision an RDS PostgreSQL instance on AWS
-- Update `prisma/schema.prisma` — change `provider` from `"sqlite"` to `"postgresql"` and update the connection URL
-- Run `npx prisma migrate dev` to generate PostgreSQL migrations
-- Test all existing queries against PostgreSQL (SQLite and PostgreSQL have minor syntax differences)
-- Update `DATABASE_URL` in `.env` to point to the RDS instance
-
-**Migration script pattern:**
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-```
-
-**Important:** The `stateData` field on `ProjectState` stores JSON as a string. This works in both SQLite and PostgreSQL, but consider switching to a native `Json` type in PostgreSQL for better queryability.
-
-### 1C. Live Database Connector (Ingestion Page)
-
-**Why:** The ingestion page has a "Live DB" tab with a connection form (`upload/page.tsx:367–436`), but clicking "Test & Connect" just toggles a local state variable. It doesn't actually connect to any database.
-
-**What to build:**
-- Create `/api/projects/[id]/connect-db` route
-- Accept connection parameters (engine, host, port, database, username, password)
-- Use a pooling library (e.g., `pg` for PostgreSQL, `mysql2` for MySQL) to test the connection
-- On success, query `information_schema.tables` and `information_schema.columns` to get the schema metadata
-- Return the table list to the frontend
-- Allow the user to select tables, then pull a sample (e.g., first 100 rows) for profiling
-- Pipe the sample through the existing profiling logic
-
-**Security consideration:** Store connection credentials encrypted, not in plain text. Consider using AWS Secrets Manager.
-
-### 1D. GitHub Integration
-
-**Why:** The project creation form already has a "Target Git Repository" field, and the deploy page simulates a Git push. The actual GitHub API integration is not yet built.
-
-**What to build:**
-- Add GitHub OAuth or Personal Access Token (PAT) support
-- Create `/api/github/connect` route for authentication
-- Create `/api/projects/[id]/push-to-github` route that:
-  - Creates a branch (e.g., `dimwiz/model-<projectId>`)
-  - Commits the generated dbt/SQL files
-  - Creates a Pull Request
-- Update the Deploy page to call the real GitHub push instead of simulating it
-- Store the GitHub connection per user or per project
-
-**Dependencies:** `@octokit/rest` for GitHub API interaction
+**What to change in `lib/prompts.ts`:**
+- Rename the role framing from "senior data architect" to "senior Business Analyst"
+- Expand the `---KPI_EXTRACT---` output to include a structured list of **banked requirements** (not just KPIs), each with a name, description, priority, and category (e.g., business process, dimension, KPI, business rule)
+- This banked output is what gets persisted and handed to the Bus Matrix stage
 
 ---
 
-## Phase 2 — UX Restructuring: Linear → Modular
+### 3. Fix the Requirements → Bus Matrix Handoff
 
-> **Goal:** Transform the platform from a strictly sequential wizard into a modular workspace where steps contribute knowledge independently and the user can enter from different starting points.
-> **Priority:** High — This was the single biggest outcome of the feedback session.
-> **Estimated effort:** 3–4 weeks
-> **When:** After Phase 1, or partially in parallel if capacity allows.
+**Current state:** The Bus Matrix generation route (`app/api/projects/[id]/bus-matrix/generate/route.ts`) reads the full `stateData` (chat history, KPIs, profiling data) and dumps it all into the AI prompt. The transition between Requirements and Bus Matrix is incoherent — extracted business processes and dimensions don't flow through clearly.
 
-### Why This Matters
+**What Neil wants:** The handoff should emulate a professional handover — as if a Business Analyst produced a stack of structured requirement papers and handed them to a Data Warehouse Designer. The Bus Matrix should consume the **banked requirements output** specifically, not raw chat history.
 
-The current wizard layout in `WizardLayoutClient.tsx` enforces a strict linear flow:
+**What to change:**
+- The Requirements page should produce a clear "Banked Requirements" data structure (list of finalized processes, KPIs, dimensions, business rules) and persist it to `stateData`
+- Update `app/api/projects/[id]/bus-matrix/generate/route.ts` to consume this banked output instead of raw context
+- Update the `BUS_MATRIX_GENERATOR` prompt in `lib/prompts.ts` to frame the AI as a **Data Warehouse Designer** receiving structured requirements from a BA
 
-```
-Ingest → Profile → Requirements → Bus Matrix → Schema Editor → Code Gen → Deploy
-```
-
-Steps that haven't been completed are locked (greyed out, `cursor: not-allowed`). This means a user **must** upload data before they can define requirements. Heinrich explained that this doesn't reflect real consulting work, where often:
-
-- You start with business requirements and no data
-- You have an industry template and want to propose a model before data exists
-- You want to jump to the schema editor to sketch ideas
-
-Neil added that each step should contribute to a **shared knowledge base**, and the system should be able to generate useful output from whatever knowledge is available.
-
-### 2A. Architecture: The Shared Knowledge Store
-
-**Concept:** Instead of each step simply passing data to the next step, every step reads from and writes to a shared **Knowledge Context** for the project. This context is the unified state that any step can access.
-
-**Current state:** The `ProjectState.stateData` JSON blob already stores data for each step, but each step only reads its own data and the previous step's output. The restructure would make every step aware of the full context.
-
-**What to build:**
-- Define a formal `KnowledgeContext` TypeScript interface:
-
-```typescript
-interface KnowledgeContext {
-  // Data knowledge (from ingestion + profiling)
-  uploadedFiles?: FileMetadata[];
-  profileResults?: ProfileResults;
-  aiInterpretation?: string;
-
-  // Business knowledge (from requirements)
-  chatHistory?: ChatMessage[];
-  kpis?: KPI[];
-  dimensions?: DimensionSpec[];
-  businessRules?: BusinessRule[];
-  grain?: string;
-
-  // Industry/template knowledge (future: from requirements-first path)
-  industryContext?: string;
-  templateId?: string;
-
-  // Structural knowledge (from bus matrix + schema)
-  busMatrix?: BusMatrix;
-  schema?: SchemaDefinition;
-
-  // Output knowledge (from code gen)
-  generatedCode?: GeneratedFile[];
-}
-```
-
-- Create a `lib/knowledge.ts` module with:
-  - `getKnowledge(projectId)` — load the full context
-  - `updateKnowledge(projectId, partial)` — merge new knowledge
-  - `getKnowledgeSummary(projectId)` — return a text summary of what's known (for AI prompts)
-
-### 2B. Dual Entry Paths
-
-**Concept:** When a user creates a new project, they should be asked how they want to start:
-
-```
-┌─────────────────────────────────┐
-│    How do you want to start?    │
-│                                 │
-│  ┌───────────┐  ┌────────────┐  │
-│  │ I have    │  │ I have     │  │
-│  │ source    │  │ business   │  │
-│  │ data      │  │ context    │  │
-│  └───────────┘  └────────────┘  │
-└─────────────────────────────────┘
-```
-
-**Path A — Data-First (current flow):**
-1. Upload CSVs or connect to a live database
-2. Profile the data
-3. AI interprets the profiles
-4. Define requirements (with data context already available)
-5. Generate Bus Matrix → Schema → Code
-
-**Path B — Requirements-First (new):**
-1. Start with the Requirements chat
-2. Upload business context docs, dashboard specs, or describe the problem verbally
-3. AI proposes candidate dimensions, facts, and KPIs based on industry knowledge
-4. Generate a proposed Bus Matrix → Schema
-5. Later, when data becomes available, connect data and compare against the proposed model
-
-**What to build:**
-- Add a "project type" or "entry path" selector after project creation (in `ProjectsClient.tsx`)
-- Store the selected path in the project state
-- For Path B, the Requirements page becomes the landing page instead of Upload
-- Update AI prompts to handle the case where no profiling data exists yet
-
-### 2C. Unlock All Tabs
-
-**What to change:** Remove the locking logic from `WizardLayoutClient.tsx:72–88` so that all tabs are always navigable.
-
-**What to add instead:**
-- Each tab should show an **empty state** with a clear explanation of what's missing
-- For example, if the user navigates to "Schema Editor" before profiling data:
-  - Show: *"No schema generated yet. You can sketch a model manually, or complete Profiling + Requirements to auto-generate one."*
-  - Offer a "Start from Scratch" button that lets them add tables manually
-- Each tab header should show a **knowledge indicator** — a small badge showing whether that step has contributed knowledge to the context:
-  - 🟢 = Knowledge contributed
-  - ⚪ = No knowledge yet
-  - 🔄 = Knowledge outdated (upstream changed)
-
-### 2D. Update Navigation UX
-
-**Current:** Linear breadcrumb with chevrons and locked steps.
-
-**Proposed:** A tab-style navigation where each tab is always accessible, with visual indicators:
-
-```
-┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
-│ 🟢 Data  │ 🟢 Prof. │ ⚪ Reqs  │ ⚪ Matrix │ ⚪ Schema │ ⚪ Code  │
-└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘
-```
-
-- Tabs should feel like workspace panels, not sequential steps
-- The active tab is highlighted with the green accent color
-- The "Deploy" step should be downgraded to a button/action within Code Gen, not a full tab (per feedback that scheduling is not a primary focus)
+**Note:** The Bus Matrix screen itself is acceptable. The problem is entirely with the input quality.
 
 ---
 
-## Phase 3 — Schema Visual & Output Improvements
+### 4. Add a "Bank Requirements" Action
 
-> **Goal:** Improve the schema editor and add documentation export capabilities.
-> **Priority:** Medium — These were specific, actionable pieces of feedback.
-> **Estimated effort:** 2–3 weeks
-> **When:** After Phase 2, or interleaved.
-
-### 3A. Star Schema Layout: Facts in Center, Dimensions Around
-
-**Feedback from Neil:** The current schema layout places nodes somewhat randomly. Facts should be in the middle, and dimensions should sit around them in a radial or grid pattern.
-
-**Current:** The schema generator returns node positions but they're not laid out in a star pattern. The ReactFlow canvas in `review/page.tsx` just places them wherever the AI or the user positions them.
+**Current state:** The Requirements page has a "Proceed to Bus Matrix" button that just navigates to the next step without explicitly saving a structured output.
 
 **What to build:**
-- Create a `layoutStarSchema(nodes, edges)` function that:
-  1. Identifies fact tables (nodes where `type === 'factNode'`)
-  2. Places facts in the center of the canvas, spaced vertically
-  3. For each fact, arranges its connected dimensions in a radial arc around it
-  4. Dimensions shared between facts are positioned between them
-- Call this layout function on schema load and add a "Re-layout" button
-- Use an algorithm like concentric circles or force-directed layout with fixed center
-
-**Visual reference:**
-```
-                dim_customer
-               /            \
-  dim_date --- FACT_SALES --- dim_product
-               \            /
-                dim_store
-
-              dim_promotion
-               /
-  dim_date --- FACT_INVENTORY --- dim_product
-               \
-                dim_warehouse
-```
-
-### 3B. Relationship Cardinality Labels
-
-**Feedback from Heinrich:** The schema view should show relationship types (one-to-many, one-to-one) on the edges, not just that tables are connected.
-
-**What to build:**
-- Extend the edge data model to include a `cardinality` field (e.g., `"1:M"`, `"1:1"`, `"M:M"`)
-- In the schema generator prompt, ask Claude to specify cardinality for each relationship
-- Render cardinality labels on the edges in the ReactFlow canvas using custom edge labels
-- Add the ability to edit cardinality by clicking on an edge
-
-### 3C. Documentation Export
-
-**Feedback from Heinrich:** The platform would become much more valuable if it could generate documentation outputs that can be used directly in client deliverables.
-
-**What to build (incrementally):**
-
-| Export Format | Priority | Description |
-|---|---|---|
-| Markdown | High | A structured `.md` file documenting all tables, columns, relationships, data types, and the reasoning behind the model |
-| ERD Image (PNG/SVG) | Medium | Export the current ReactFlow canvas as a downloadable image |
-| draw.io XML | Low | Generate a `.drawio` compatible XML file so the ERD can be opened and edited in diagrams.net |
-| Word/PDF | Future | Generate a client-themed document (would require a templating engine like docx-templates) |
+- Before proceeding, the system should compile all extracted requirements, KPIs, dimensions, and business rules into a structured "Banked Requirements" object
+- Store this in `stateData` under a dedicated key (e.g., `bankedRequirements`)
+- Show the user a summary/review of what's being banked before handoff
+- This becomes the contract between the BA agent and the DWH Designer agent
 
 ---
 
-## Phase 4 — Future Product Extensions
+## Sprint 2 — Data Input Paths (After UI Work)
 
-> **Goal:** Implement the broader product vision items suggested in the meeting.
-> **Priority:** Lower — These expand the platform's value but depend on Phases 1–3 being solid.
-> **Estimated effort:** 4–6 weeks (spread over time)
-> **When:** After Phases 1–3 are complete.
+> Only start this after Sprint 1 is complete. Neil said these can wait.
 
-### 4A. Requirements-Only / Proposal Mode
+### 5. PostgreSQL Database Connection
 
-**Concept from Heinrich:** A consultant should be able to use the platform to design a data model **before** they have any real data. They would:
-1. Describe the business problem and industry
-2. Upload proposal documents, dashboard mockups, or reporting specs
-3. The AI proposes a best-fit dimensional model based on industry patterns
-4. Later, when data arrives, the actual data is profiled and compared against the proposed model
-5. The system highlights differences and suggests amendments
+The platform should support **two co-equal data input paths**:
+1. **File-based ingestion:** CSV upload via the frontend (already working)
+2. **Direct database profiling:** Connect to a PostgreSQL database and profile live tables
 
-**What to build:**
-- Add industry template profiles (e.g., Retail, Healthcare, Finance, Telecommunications)
-- Create a "Model Proposal" AI prompt that generates a schema from requirements + industry context alone
-- Build a "Data vs. Model Comparison" view that shows:
-  - Columns in the data that aren't in the model
-  - Model tables that have no data source yet
-  - Type mismatches or naming differences
+The "Live DB" tab in `app/wizard/[projectId]/upload/page.tsx` currently has a connection form UI but no backend. Build the actual connection logic.
 
-### 4B. Semantic / BI Layer Outputs
+### 6. S3 File Storage
 
-**Concept from Heinrich:** Beyond the warehouse model, generate outputs that support BI tools.
-
-**What to build (future):**
-- Generate Power BI measure definitions (DAX)
-- Generate dbt metrics/semantic layer YAML
-- Generate LookML model files for Looker
-- Generate Tableau calculated fields
-
-This is a significant expansion and should be scoped carefully once the core platform is stable.
-
-### 4C. Industry Templates & Pre-Built Models
-
-**Concept:** Allow users to start from a known-good model rather than from scratch.
-
-**What to build:**
-- A template library with pre-built dimensional models:
-  - Retail (Sales, Inventory, Promotions)
-  - Financial Services (Transactions, Accounts, Products)
-  - Healthcare (Patient Encounters, Claims)
-  - SaaS (Subscriptions, Usage, Support)
-- Users can select a template, then customize it through the schema editor
-- Templates include pre-filled Bus Matrices, KPIs, and documentation
+Uploaded CSVs should be stored in S3 for persistence. Currently they are processed in-memory and lost on refresh.
 
 ---
 
-## Phase Summary & Sequencing
+## Backlog — Lower Priority / Cosmetic
 
-| Phase | Focus | Duration | Depends On |
-|---|---|---|---|
-| **Phase 1** | Backend integrations (S3, RDS, Live DB, GitHub) | 2–3 weeks | Nothing — start immediately |
-| **Phase 2** | UX restructure (Knowledge Store, dual paths, unlock tabs) | 3–4 weeks | Phase 1 (or partial overlap) |
-| **Phase 3** | Schema visual & export (star layout, cardinality, docs) | 2–3 weeks | Phase 2 (or interleaved) |
-| **Phase 4** | Product extensions (proposal mode, BI outputs, templates) | 4–6 weeks | Phases 1–3 complete |
+These items are acknowledged but not urgent:
 
----
-
-## Quick Reference: What Changed vs. Original Plan
-
-| Original Plan | Meeting Feedback | Action |
-|---|---|---|
-| Linear wizard flow | Steps should be modular, not locked | **Phase 2** — Restructure to modular tabs |
-| Data-first only | Support requirements-first entry | **Phase 2B** — Dual entry paths |
-| Schema nodes arranged freely | Facts center, dims around, star layout | **Phase 3A** — Layout algorithm |
-| Edges show connections only | Show cardinality (1:M, 1:1) | **Phase 3B** — Edge labels |
-| No documentation export | Generate markdown, ERD, client docs | **Phase 3C** — Export capabilities |
-| Scheduling was a full step | Scheduling is not core value | **Phase 2D** — Downgrade to action in Code Gen |
-| Deploy was a major phase | Focus on model quality, not deployment | De-prioritize, keep as lightweight action |
-| No proposal/pre-sales mode | Requirements-only modelling is valuable | **Phase 4A** — Proposal mode |
-| Warehouse-only output | BI semantic layer outputs | **Phase 4B** — Future BI exports |
-| Restructure later | Restructure NOW, not later | **Phase 2** runs immediately after Phase 1 |
+| Item | Notes |
+|---|---|
+| Schema layout (facts center, dims around) | A `layoutStarSchema` function exists and works. Neil says it still "irritates" him but is acceptable for now |
+| Image/screenshot upload in Requirements | Platform should eventually support images alongside text. Not just text-only thinking |
+| Dark/light theme preferences | Cosmetic refinement, not a blocker |
+| Documentation export (Markdown, ERD) | Future capability |
+| BI semantic layer outputs (dbt metrics, DAX) | Future capability |
 
 ---
 
-## Non-Negotiable Principles
+## Testing
 
-1. **The AI proposes, the user confirms.** Every AI-generated artifact (schema, KPIs, bus matrix) is a suggestion that the user reviews and approves before it becomes part of the model.
-
-2. **Knowledge is additive.** Every interaction — uploading a file, chatting with the requirements agent, editing the bus matrix — adds to the shared knowledge context. Nothing is lost when switching between tabs.
-
-3. **The platform should work with partial knowledge.** If only requirements exist (no data), the system should still generate a useful model. If only data exists (no requirements), it should still profile and suggest structure.
-
-4. **Premium feel is mandatory.** The dark-mode, IDE-style aesthetic is part of the product's identity. Every new feature must maintain this standard.
+**New primary test dataset:** The **Brazilian E-Commerce Public Dataset by Olist** on Kaggle.
+- ~100,000 orders from 2016–2018
+- Tables: **orders, payments, freight, customers, products, reviews, sellers, geolocation**
+- Significantly richer than a single flat CSV — ideal for validating profiling, requirements extraction, and schema generation
 
 ---
 
-## Key Files Reference
+## Key Files for Sprint 1
 
-| File | Purpose | Impact |
-|---|---|---|
-| `components/WizardLayoutClient.tsx` | Main navigation shell | Key file for Phase 2 restructure |
-| `components/ProjectsClient.tsx` | Project dashboard | Add entry path selector here |
-| `app/wizard/[projectId]/upload/page.tsx` | Ingestion page | Integrate S3, fix live DB connector |
-| `app/wizard/[projectId]/profile/page.tsx` | Data profiling | Already functional, add empty state |
-| `app/wizard/[projectId]/requirements/page.tsx` | Requirements chat | Update prompts for no-data scenarios |
-| `app/wizard/[projectId]/bus-matrix/page.tsx` | Bus Matrix editor | Add empty state, manual creation |
-| `app/wizard/[projectId]/review/page.tsx` | Schema editor | Star layout, cardinality, export |
-| `app/wizard/[projectId]/export/page.tsx` | Code gen output | Merge deploy action here |
-| `app/wizard/[projectId]/deploy/page.tsx` | Deployment | Downgrade to action, not full page |
-| `prisma/schema.prisma` | Database schema | Migrate to PostgreSQL |
-| `lib/bedrock.ts` | AI client | No changes needed |
-| `lib/prompts.ts` | AI prompts | Update for requirements-first mode |
-| `lib/aws.ts` | AWS config | Add S3 and RDS clients |
+| File | What to Change |
+|---|---|
+| `app/wizard/[projectId]/requirements/page.tsx` | Rebuild into three-pane layout with requirements hierarchy, formulas demotion |
+| `lib/prompts.ts` | Rework `REQUIREMENTS_INTERVIEWER` to BA role; rework `BUS_MATRIX_GENERATOR` to DWH Designer role |
+| `app/api/projects/[id]/bus-matrix/generate/route.ts` | Consume banked requirements instead of raw context |
+| `app/api/projects/[id]/chat/route.ts` | Update to produce structured banked requirements output |

@@ -49,7 +49,15 @@ export function renderAIResponse(text: string): string {
  */
 export function extractJSON(text: string): { json: any; remainingText: string } | null {
   try {
-    // Try to find a JSON block between markers
+    // Try to find a JSON block between markers (Banked Requirements)
+    const bankMatch = text.match(/---BANKED_REQUIREMENTS---([\s\S]*?)---END_BANKED_REQUIREMENTS---/);
+    if (bankMatch) {
+      const json = JSON.parse(bankMatch[1].trim());
+      const remainingText = text.replace(/---BANKED_REQUIREMENTS---[\s\S]*?---END_BANKED_REQUIREMENTS---/, '').trim();
+      return { json, remainingText };
+    }
+
+    // Try to find a JSON block between markers (Legacy KPIs)
     const markerMatch = text.match(/---KPI_EXTRACT---([\s\S]*?)---END_KPI_EXTRACT---/);
     if (markerMatch) {
       const json = JSON.parse(markerMatch[1].trim());
