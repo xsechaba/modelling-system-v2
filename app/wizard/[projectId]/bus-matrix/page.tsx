@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowRight, Grid, Plus, Check, X, Edit2, Trash2, Loader2, Save } from 'lucide-react';
+import { useWizard } from '@/components/WizardContext';
 
 export default function BusMatrixPage() {
   const { projectId } = useParams() as { projectId: string };
   const router = useRouter();
+  const { markStepComplete } = useWizard();
 
   const [matrix, setMatrix] = useState<{ process: string, dims: boolean[] }[]>([]);
   const [dimensions, setDimensions] = useState<string[]>([]);
@@ -15,6 +17,7 @@ export default function BusMatrixPage() {
 
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   const [hoveredCol, setHoveredCol] = useState<number | null>(null);
+  const [isStale, setIsStale] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -27,6 +30,10 @@ export default function BusMatrixPage() {
           if (parsed.busMatrix) {
             setDimensions(parsed.busMatrix.dimensions || []);
             setMatrix(parsed.busMatrix.matrix || []);
+            // Check staleness: requirements banked after bus matrix was generated
+            const reqAt = parsed.requirementsBankedAt || 0;
+            const matrixAt = parsed.busMatrixGeneratedAt || 0;
+            if (reqAt > matrixAt && matrixAt > 0) setIsStale(true);
             setLoading(false);
           } else {
             // Empty state
@@ -124,6 +131,7 @@ export default function BusMatrixPage() {
           completedSteps
         })
       });
+      markStepComplete('bus-matrix');
       router.push(`/wizard/${projectId}/review`);
     } catch (e) {
       console.error(e);
@@ -160,6 +168,14 @@ export default function BusMatrixPage() {
 
       <div style={{ flex: 1, padding: '32px', overflowY: 'auto', background: '#050505' }}>
         
+        {/* Staleness warning */}
+        {isStale && (
+          <div style={{ maxWidth: '1000px', margin: '0 auto 16px', padding: '10px 16px', background: 'rgba(255,189,46,0.08)', border: '1px solid rgba(255,189,46,0.3)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8125rem', color: '#ffbd2e' }}>
+            <span>⚠ Requirements have been updated since this bus matrix was generated. Click <strong>Generate via AI</strong> to refresh.</span>
+            <button onClick={() => setIsStale(false)} style={{ background: 'transparent', border: 'none', color: '#ffbd2e', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
+          </div>
+        )}
+        
         <div className="animate-fade-in" style={{ background: 'var(--color-black-light)', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'hidden', maxWidth: '1000px', margin: '0 auto' }}>
             
             {/* Toolbar */}
@@ -170,11 +186,30 @@ export default function BusMatrixPage() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={addProcess} style={{ background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-white)', padding: '6px 12px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}><Plus size={12}/> Add Process</button>
                     <button onClick={addDimension} style={{ background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-white)', padding: '6px 12px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}><Plus size={12}/> Add Dimension</button>
+                    <button onClick={async () => {
+                        setLoading(true);
+                        try {
+                            const genRes = await fetch(`/api/projects/${projectId}/bus-matrix/generate`, { method: 'POST' });
+                            if (genRes.ok) {
+                                const genData = await genRes.json();
+                                setDimensions(genData.dimensions || []);
+                                setMatrix(genData.matrix || []);
+                                // Record generation timestamp, clear stale warning
+                                const stRes = await fetch(`/api/projects/${projectId}/state`);
+                                const stData = await stRes.json();
+                                const stParsed = JSON.parse(stData.stateData || '{}');
+                                stParsed.busMatrixGeneratedAt = Date.now();
+                                await fetch(`/api/projects/${projectId}/state`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stateData: JSON.stringify(stParsed) }) });
+                                setIsStale(false);
+                            }
+                        } catch(e) { console.error(e) }
+                        setLoading(false);
+                    }} style={{ background: 'var(--color-green)', border: 'none', color: '#000', padding: '6px 12px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 600 }}>Generate via AI</button>
                 </div>
             </div>
 
             {/* Matrix Grid */}
-            <div style={{ overflowX: 'auto', minHeight: '300px', position: 'relative' }}>
+            <div style={{ overflowX: 'auto', position: 'relative' }}>
                 {dimensions.length === 0 && matrix.length === 0 ? (
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px', zIndex: 10, background: 'var(--color-black-light)' }}>
                         <div style={{ textAlign: 'center' }}>
@@ -191,6 +226,12 @@ export default function BusMatrixPage() {
                                         const genData = await genRes.json();
                                         setDimensions(genData.dimensions || []);
                                         setMatrix(genData.matrix || []);
+                                        const stRes = await fetch(`/api/projects/${projectId}/state`);
+                                        const stData = await stRes.json();
+                                        const stParsed = JSON.parse(stData.stateData || '{}');
+                                        stParsed.busMatrixGeneratedAt = Date.now();
+                                        await fetch(`/api/projects/${projectId}/state`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stateData: JSON.stringify(stParsed) }) });
+                                        setIsStale(false);
                                     }
                                 } catch(e) { console.error(e) }
                                 setLoading(false);
@@ -237,7 +278,7 @@ export default function BusMatrixPage() {
                                         <button 
                                             onClick={() => toggleCell(rIdx, cIdx)}
                                             style={{ 
-                                                width: '100%', height: '100%', minHeight: '60px', background: isActive ? 'rgba(134,188,37,0.1)' : 'transparent', border: 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                width: '100%', height: '100%', minHeight: '44px', background: isActive ? 'rgba(134,188,37,0.1)' : 'transparent', border: 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center'
                                             }}
                                             onMouseEnter={e => e.currentTarget.style.background = isActive ? 'rgba(134,188,37,0.2)' : 'rgba(255,255,255,0.05)'}
                                             onMouseLeave={e => e.currentTarget.style.background = isActive ? 'rgba(134,188,37,0.1)' : 'transparent'}

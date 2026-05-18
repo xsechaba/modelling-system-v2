@@ -5,9 +5,10 @@ import {
   ArrowRight, Bot, Target, Send, UploadCloud, FileText, 
   CheckCircle2, Loader2, Layers, ListFilter, 
   Info, Hash, Database,
-  Settings2, Trash2, Edit3, MoreHorizontal, History, X
+  Settings2, Trash2, Edit3, History, X, Plus
 } from 'lucide-react';
 import { renderAIResponse } from '@/lib/markdown';
+import { useWizard } from '@/components/WizardContext';
 
 interface BankedRequirement {
   id: string;
@@ -22,6 +23,7 @@ interface BankedRequirement {
 export default function RequirementsPage() {
   const { projectId } = useParams() as { projectId: string };
   const router = useRouter();
+  const { markStepComplete } = useWizard();
   
   // -- State --
   const [messages, setMessages] = useState<any[]>([]);
@@ -32,6 +34,8 @@ export default function RequirementsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'process' | 'dimension' | 'kpi' | 'rule'>('all');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState<BankedRequirement | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,10 +92,14 @@ export default function RequirementsPage() {
   }, [messages]);
 
   // -- Handlers --
-  const sendMessage = async (messageText: string, isDoc: boolean = false) => {
-    if (!messageText.trim()) return;
+  const sendMessage = async (messageText: string, isDoc: boolean = false, imagePayload?: { data: string; mediaType: string; name: string }) => {
+    if (!messageText.trim() && !imagePayload) return;
     
-    setMessages(prev => [...prev, { role: 'user', content: messageText }]);
+    const displayContent = imagePayload
+      ? `[Uploaded Image: ${imagePayload.name}] ${messageText}`.trim()
+      : messageText;
+
+    setMessages(prev => [...prev, { role: 'user', content: displayContent, isImage: !!imagePayload, imageName: imagePayload?.name }]);
     setInput('');
     setIsLoading(true);
     
@@ -99,7 +107,15 @@ export default function RequirementsPage() {
       const res = await fetch(`/api/projects/${projectId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText, isDocument: isDoc })
+        body: JSON.stringify({
+          message: messageText,
+          isDocument: isDoc,
+          ...(imagePayload ? {
+            imageData: imagePayload.data,
+            imageMediaType: imagePayload.mediaType,
+            imageName: imagePayload.name,
+          } : {})
+        })
       });
       
       if (res.ok) {
@@ -143,25 +159,75 @@ export default function RequirementsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const truncatedText = text.length > 20000 ? text.substring(0, 20000) + '... [Truncated]' : text;
-      sendMessage(`[Uploaded Document: ${file.name}]\n\n${truncatedText}`, true);
-    };
-    reader.readAsText(file);
+
+    const isImage = file.type.startsWith('image/');
+
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        // dataUrl = "data:image/png;base64,XXXX..."
+        const [header, base64Data] = dataUrl.split(',');
+        const mediaType = header.replace('data:', '').replace(';base64', '');
+        sendMessage('', false, { data: base64Data, mediaType, name: file.name });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const truncatedText = text.length > 20000 ? text.substring(0, 20000) + '... [Truncated]' : text;
+        sendMessage(`[Uploaded Document: ${file.name}]\n\n${truncatedText}`, true);
+      };
+      reader.readAsText(file);
+    }
     e.target.value = '';
   };
 
   const handleDeleteRequirement = (id: string) => {
     setRequirements(prev => prev.filter(r => r.id !== id));
     if (selectedReqId === id) setSelectedReqId(null);
+    setIsEditing(false);
+    setEditDraft(null);
   };
 
   const handleToggleFinalize = (id: string) => {
     setRequirements(prev => prev.map(r => 
       r.id === id ? { ...r, status: r.status === 'Finalized' ? 'Draft' : 'Finalized' } : r
     ));
+  };
+
+  const handleStartEdit = (req: BankedRequirement) => {
+    setEditDraft({ ...req });
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditDraft(null);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editDraft) return;
+    setRequirements(prev => prev.map(r => r.id === editDraft.id ? { ...editDraft } : r));
+    setIsEditing(false);
+    setEditDraft(null);
+  };
+
+  const handleAddRequirement = () => {
+    const newReq: BankedRequirement = {
+      id: `req-${Date.now()}`,
+      name: 'New Requirement',
+      description: '',
+      type: 'process',
+      priority: 'Medium',
+      status: 'Draft',
+      logic: '',
+    };
+    setRequirements(prev => [...prev, newReq]);
+    setSelectedReqId(newReq.id);
+    setEditDraft({ ...newReq });
+    setIsEditing(true);
   };
 
   const handleProceedClick = () => {
@@ -178,6 +244,7 @@ export default function RequirementsPage() {
       if (!completedSteps.includes('requirements')) completedSteps.push('requirements');
       
       parsed.bankedRequirements = requirements;
+      parsed.requirementsBankedAt = Date.now();
       
       await fetch(`/api/projects/${projectId}/state`, {
         method: 'PUT',
@@ -188,6 +255,7 @@ export default function RequirementsPage() {
           stateData: JSON.stringify(parsed)
         })
       });
+      markStepComplete('requirements');
       router.push(`/wizard/${projectId}/bus-matrix`);
     } catch (e) {
       console.error(e);
@@ -231,7 +299,14 @@ export default function RequirementsPage() {
           <div style={{ padding: '16px', borderBottom: '1px solid var(--color-border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
               <ListFilter size={14} color="var(--color-white-muted)" />
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Hierarchy</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1 }}>Hierarchy</span>
+              <button
+                onClick={handleAddRequirement}
+                title="Add requirement manually"
+                style={{ background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '4px', color: 'var(--color-white-muted)', cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem' }}
+              >
+                <Plus size={10} /> Add
+              </button>
             </div>
             
             {/* Category Tabs */}
@@ -300,8 +375,8 @@ export default function RequirementsPage() {
               <span>Business Analyst Agent is active</span>
             </div>
             <div style={{ display: 'flex', gap: '16px' }}>
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".txt,.md,.csv,.json" />
-              <button onClick={handleFileUpload} disabled={isLoading} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp" />
+              <button onClick={handleFileUpload} disabled={isLoading} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }} title="Upload documents or images (.txt, .md, .csv, .json, .png, .jpg, .gif, .webp)">
                 <UploadCloud size={14} /> Upload Context
               </button>
             </div>
@@ -323,6 +398,17 @@ export default function RequirementsPage() {
                 <div style={{ flex: 1, color: msg.content.startsWith('[Uploaded') ? 'var(--color-green)' : 'var(--color-white)', lineHeight: 1.6, fontSize: '0.9375rem' }}>
                   {msg.role === 'assistant' ? (
                     <div dangerouslySetInnerHTML={{ __html: renderAIResponse(msg.content) }} />
+                  ) : msg.isImage ? (
+                    <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-green)', fontSize: '0.8125rem', marginBottom: '8px' }}>
+                        <UploadCloud size={14} /> {msg.imageName || 'Image uploaded'}
+                      </div>
+                      {msg.content && msg.content.replace(`[Uploaded Image: ${msg.imageName}]`, '').trim() && (
+                        <div style={{ fontSize: '0.875rem', color: 'var(--color-white)' }}>
+                          {msg.content.replace(`[Uploaded Image: ${msg.imageName}]`, '').trim()}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                       {msg.content}
@@ -387,7 +473,89 @@ export default function RequirementsPage() {
                   Select a banked requirement from the hierarchy to view and edit its logic.
                 </div>
               </div>
+            ) : isEditing && editDraft ? (
+              /* ── EDIT MODE ── */
+              <div className="animate-fade-in" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-green)' }}>Editing Requirement</span>
+                  <button onClick={handleCancelEdit} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><X size={16} /></button>
+                </div>
+
+                {/* Name */}
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-white-muted)', marginBottom: '6px' }}>Name</div>
+                  <input
+                    value={editDraft.name}
+                    onChange={e => setEditDraft(d => d ? { ...d, name: e.target.value } : d)}
+                    style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-white)', fontSize: '0.9rem', padding: '8px 12px', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                {/* Type & Priority */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-white-muted)', marginBottom: '6px' }}>Type</div>
+                    <select
+                      value={editDraft.type}
+                      onChange={e => setEditDraft(d => d ? { ...d, type: e.target.value as BankedRequirement['type'] } : d)}
+                      style={{ width: '100%', background: '#1a1a1a', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-white)', fontSize: '0.8125rem', padding: '8px 10px', outline: 'none' }}
+                    >
+                      <option value="process">Process</option>
+                      <option value="dimension">Dimension</option>
+                      <option value="kpi">KPI</option>
+                      <option value="rule">Rule</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-white-muted)', marginBottom: '6px' }}>Priority</div>
+                    <select
+                      value={editDraft.priority}
+                      onChange={e => setEditDraft(d => d ? { ...d, priority: e.target.value as BankedRequirement['priority'] } : d)}
+                      style={{ width: '100%', background: '#1a1a1a', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-white)', fontSize: '0.8125rem', padding: '8px 10px', outline: 'none' }}
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-white-muted)', marginBottom: '6px' }}>Description</div>
+                  <textarea
+                    value={editDraft.description}
+                    onChange={e => setEditDraft(d => d ? { ...d, description: e.target.value } : d)}
+                    rows={3}
+                    style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-white)', fontSize: '0.875rem', padding: '8px 12px', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6 }}
+                  />
+                </div>
+
+                {/* Logic */}
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-white-muted)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Hash size={12} /> Technical Logic / Formula
+                  </div>
+                  <textarea
+                    value={editDraft.logic || ''}
+                    onChange={e => setEditDraft(d => d ? { ...d, logic: e.target.value } : d)}
+                    rows={4}
+                    placeholder="e.g. SUM(order_total) WHERE status = 'complete'"
+                    style={{ width: '100%', background: '#000', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-green)', fontSize: '0.8125rem', fontFamily: 'monospace', padding: '10px 12px', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', marginTop: 'auto' }}>
+                  <button onClick={handleCancelEdit} style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-white)', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveEdit} style={{ flex: 1, padding: '10px', background: 'var(--color-white)', border: 'none', borderRadius: '6px', color: 'var(--color-black)', fontSize: '0.8125rem', cursor: 'pointer', fontWeight: 600 }}>
+                    Save Changes
+                  </button>
+                </div>
+              </div>
             ) : (
+              /* ── VIEW MODE ── */
               <div className="animate-fade-in" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
                 {/* Header */}
@@ -399,8 +567,8 @@ export default function RequirementsPage() {
                     </div>
                     <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>{selectedReq.name}</h2>
                   </div>
-                  <button style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}>
-                    <MoreHorizontal size={18} />
+                  <button onClick={() => handleStartEdit(selectedReq)} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer', padding: '4px' }} title="Edit requirement">
+                    <Edit3 size={16} />
                   </button>
                 </div>
 
@@ -423,7 +591,9 @@ export default function RequirementsPage() {
                     <div style={{ background: '#000', border: '1px solid var(--color-border)', borderRadius: '8px', overflow: 'hidden' }}>
                       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: 'var(--color-green)' }}>expression.sql</span>
-                        <Edit3 size={12} style={{ cursor: 'pointer' }} />
+                        <button onClick={() => handleStartEdit(selectedReq)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-white-muted)', padding: 0 }}>
+                          <Edit3 size={12} />
+                        </button>
                       </div>
                       <pre style={{ margin: 0, padding: '16px', fontSize: '0.8125rem', fontFamily: 'monospace', color: 'var(--color-white)', overflowX: 'auto' }}>
                         {selectedReq.logic}

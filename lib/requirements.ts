@@ -25,12 +25,13 @@ export function mergeRequirements(existing: BankedRequirement[], incoming: Banke
     const existingIndex = result.findIndex(r => r.id === newReq.id || r.name === newReq.name);
     
     if (existingIndex !== -1) {
-      // Update existing
+      // Update existing — but preserve user-managed fields (status, id)
+      // so a "Finalized" requirement doesn't revert to "Draft" on re-extraction
       result[existingIndex] = {
         ...result[existingIndex],
         ...newReq,
-        // Preserve ID if name matched but ID was different
-        id: result[existingIndex].id
+        id: result[existingIndex].id,
+        status: result[existingIndex].status,
       };
     } else {
       // Add new

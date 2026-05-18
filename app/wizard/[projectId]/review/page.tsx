@@ -7,13 +7,12 @@ import { renderAIResponse } from '@/lib/markdown';
 import { toPng } from 'html-to-image';
 import { ReactFlow, Background, Controls, Handle, Position, useNodesState, useEdgesState, addEdge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useWizard } from '@/components/WizardContext';
 
 const DimNode = ({ id, data, selected }: any) => (
   <div style={{ width: '220px', background: 'var(--color-black)', border: selected ? '2px solid var(--color-white)' : '1px solid var(--color-border)', borderRadius: '6px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
-    <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-    <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
-    <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
-    <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+    <Handle type="source" id="left" position={Position.Left} style={{ opacity: 0 }} />
+    <Handle type="source" id="right" position={Position.Right} style={{ opacity: 0 }} />
     <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-black-light)', borderBottom: '1px solid var(--color-border)' }}>
       <span style={{ fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-white)' }}>
         {data.label} 
@@ -40,10 +39,8 @@ const DimNode = ({ id, data, selected }: any) => (
 
 const FactNode = ({ id, data, selected }: any) => (
   <div style={{ width: '260px', background: 'var(--color-black)', border: selected ? '2px solid var(--color-green)' : '1px solid var(--color-border)', borderRadius: '6px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
-    <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-    <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
-    <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
-    <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+    <Handle type="target" id="left" position={Position.Left} style={{ opacity: 0 }} />
+    <Handle type="target" id="right" position={Position.Right} style={{ opacity: 0 }} />
     <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(134,188,37,0.1)', borderBottom: '1px solid rgba(134,188,37,0.2)' }}>
       <span style={{ fontWeight: 600, color: 'var(--color-green)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
         {data.label} 
@@ -77,9 +74,10 @@ const nodeTypes = { dimNode: DimNode, factNode: FactNode };
 export default function ReviewPage() {
   const { projectId } = useParams() as { projectId: string };
   const router = useRouter();
+  const { markStepComplete } = useWizard();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,6 +87,7 @@ export default function ReviewPage() {
   const [chatInput, setChatInput] = useState('');
   const [chatLog, setChatLog] = useState<{role: string, content: string}[]>([{role: 'assistant', content: 'You can edit visually, or ask me to modify the schema (e.g. "Rename dim_store to dim_location")'}]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [isStale, setIsStale] = useState(false);
 
   // Sync methods for custom nodes
   const bindNodeMethods = useCallback((n: any[]) => {
@@ -106,36 +105,60 @@ export default function ReviewPage() {
   const layoutStarSchema = useCallback((nodesToLayout: any[], currentEdges: any[]) => {
     const factNodes = nodesToLayout.filter((n: any) => n.type === 'factNode');
     const dimNodes = nodesToLayout.filter((n: any) => n.type === 'dimNode');
-    
-    let yOffset = 250;
-    
-    factNodes.forEach((fact: any) => {
-      fact.position = { x: 500, y: yOffset };
-      
+
+    // Facts are stacked vertically down the center
+    const FACT_X = 600;
+    const FACT_Y_START = 300;
+    const FACT_Y_GAP = 500;
+    const DIM_X_OFFSET = 420; // horizontal distance from fact to dims
+    const DIM_Y_GAP = 140;    // vertical spacing between stacked dims on each side
+
+    factNodes.forEach((fact: any, fi: number) => {
+      const factY = FACT_Y_START + fi * FACT_Y_GAP;
+      fact.position = { x: FACT_X, y: factY };
+
       const connectedEdges = currentEdges.filter((e: any) => e.source === fact.id || e.target === fact.id);
       const connectedDimIds = connectedEdges.map((e: any) => e.source === fact.id ? e.target : e.source);
       const factDims = dimNodes.filter((d: any) => connectedDimIds.includes(d.id));
-      
-      const angleStep = Math.PI / (factDims.length + 1);
-      
-      factDims.forEach((dim: any, j: number) => {
-        if (dim.hasBeenPositioned) {
-          dim.position = { x: 500 - 350, y: yOffset - 200 }; // shared dims positioned to the side
-        } else {
-          const angle = angleStep * (j + 1) - Math.PI / 2;
-          const radius = 350;
-          dim.position = {
-            x: 500 + Math.cos(angle) * radius,
-            y: yOffset + Math.sin(angle) * radius
-          };
-          dim.hasBeenPositioned = true;
-        }
-      });
-      
-      yOffset += 450;
+
+      // Split dims evenly: first half left, second half right
+      const leftDims = factDims.filter((_: any, i: number) => i % 2 === 0);
+      const rightDims = factDims.filter((_: any, i: number) => i % 2 === 1);
+
+      const positionStack = (dims: any[], side: 'left' | 'right') => {
+        const totalHeight = (dims.length - 1) * DIM_Y_GAP;
+        const startY = factY - totalHeight / 2;
+        dims.forEach((dim: any, i: number) => {
+          if (!dim.hasBeenPositioned) {
+            dim.position = {
+              x: side === 'left' ? FACT_X - DIM_X_OFFSET : FACT_X + DIM_X_OFFSET,
+              y: startY + i * DIM_Y_GAP,
+            };
+            dim.hasBeenPositioned = true;
+          }
+        });
+      };
+
+      positionStack(leftDims, 'left');
+      positionStack(rightDims, 'right');
     });
 
     dimNodes.forEach((dim: any) => delete dim.hasBeenPositioned);
+
+    // Assign sourceHandle/targetHandle on edges so they connect via left/right sides
+    currentEdges.forEach((edge: any) => {
+      const src = nodesToLayout.find((n: any) => n.id === edge.source);
+      const tgt = nodesToLayout.find((n: any) => n.id === edge.target);
+      if (src?.position && tgt?.position) {
+        if (tgt.position.x < src.position.x) {
+          edge.sourceHandle = 'left';
+          edge.targetHandle = 'right';
+        } else {
+          edge.sourceHandle = 'right';
+          edge.targetHandle = 'left';
+        }
+      }
+    });
 
     return [...nodesToLayout];
   }, []);
@@ -152,9 +175,23 @@ export default function ReviewPage() {
             let loadedNodes = parsed.schema.nodes;
             if (loadedNodes.every((n: any) => !n.position || (n.position.x === 0 && n.position.y === 0))) {
                 loadedNodes = layoutStarSchema(loadedNodes, parsed.schema.edges);
+            } else {
+              // Nodes already positioned — still assign side handles on edges
+              parsed.schema.edges.forEach((edge: any) => {
+                const src = loadedNodes.find((n: any) => n.id === edge.source);
+                const tgt = loadedNodes.find((n: any) => n.id === edge.target);
+                if (src?.position && tgt?.position) {
+                  edge.sourceHandle = tgt.position.x < src.position.x ? 'left' : 'right';
+                  edge.targetHandle = tgt.position.x < src.position.x ? 'right' : 'left';
+                }
+              });
             }
             setNodes(bindNodeMethods(loadedNodes));
             setEdges(parsed.schema.edges);
+            // Check staleness: bus matrix updated after schema was generated
+            const matrixAt = parsed.busMatrixGeneratedAt || 0;
+            const schemaAt = parsed.schemaGeneratedAt || 0;
+            if (matrixAt > schemaAt && schemaAt > 0) setIsStale(true);
             setLoading(false);
           } else {
             // Empty state
@@ -370,6 +407,7 @@ export default function ReviewPage() {
           completedSteps
         })
       });
+      markStepComplete('review');
       router.push(`/wizard/${projectId}/export`);
     } catch (e) {
       console.error(e);
@@ -424,6 +462,12 @@ export default function ReviewPage() {
                       const laidOutNodes = layoutStarSchema(genData.nodes, genData.edges);
                       setNodes(bindNodeMethods(laidOutNodes));
                       setEdges(genData.edges);
+                      const stRes = await fetch(`/api/projects/${projectId}/state`);
+                      const stData = await stRes.json();
+                      const stParsed = JSON.parse(stData.stateData || '{}');
+                      stParsed.schemaGeneratedAt = Date.now();
+                      await fetch(`/api/projects/${projectId}/state`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stateData: JSON.stringify(stParsed) }) });
+                      setIsStale(false);
                   }
               } catch(e) { console.error(e) }
               setLoading(false);
@@ -446,7 +490,17 @@ export default function ReviewPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', flexDirection: 'column' }}>
+        
+        {/* Staleness warning */}
+        {isStale && (
+          <div style={{ padding: '10px 32px', background: 'rgba(255,189,46,0.08)', borderBottom: '1px solid rgba(255,189,46,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8125rem', color: '#ffbd2e', flexShrink: 0 }}>
+            <span>⚠ The bus matrix has been updated since this schema was generated. Click <strong>AI Generate</strong> to refresh.</span>
+            <button onClick={() => setIsStale(false)} style={{ background: 'transparent', border: 'none', color: '#ffbd2e', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
+          </div>
+        )}
+
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         
         {/* Canvas Area / YAML View */}
         <div style={{ flex: 1, position: 'relative', background: '#080808', borderRight: '1px solid var(--color-border)' }}>
@@ -591,6 +645,7 @@ ${n.data.cols.map((c: string) => `      - name: ${c.split(' ')[0]}
 
         </div>
 
+      </div>
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    const { message, isDocument } = await req.json();
+    const { message, isDocument, imageData, imageMediaType, imageName } = await req.json();
     
     // Fetch project state for memory and profiling context
     const projectState = await prisma.projectState.findUnique({ where: { projectId: id } });
@@ -41,11 +41,34 @@ ${profilingContext}
 ${aiInterpretation}
 `;
 
-    // Add user message to history
-    chatHistory.push({ role: 'user', content: message });
+    // Build the user content — plain text or multimodal (text + image)
+    let userContent: any;
+    if (imageData && imageMediaType) {
+      // Multimodal message: send image + accompanying text to Claude
+      userContent = [
+        { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageData } },
+        { type: 'text', text: message || `[Uploaded Image: ${imageName || 'image'}] Please analyze this image for business requirements, KPIs, dimensions, and processes.` }
+      ];
+    } else {
+      userContent = message;
+    }
 
-    // Format history for Bedrock (only user/assistant roles allowed)
-    const formattedHistory = chatHistory.filter((msg: any) => msg.role === 'user' || msg.role === 'assistant');
+    // Add user message to history — store plain text representation for persistence
+    const displayMessage = imageData
+      ? `[Uploaded Image: ${imageName || 'image'}] ${message || ''}`.trim()
+      : message;
+    chatHistory.push({ role: 'user', content: displayMessage });
+
+    // Build the history for Bedrock — replace last entry with multimodal content if needed
+    const formattedHistory = chatHistory
+      .filter((msg: any) => msg.role === 'user' || msg.role === 'assistant')
+      .map((msg: any, idx: number, arr: any[]) => {
+        // The last user message may need to be replaced with the multimodal block
+        if (idx === arr.length - 1 && msg.role === 'user' && imageData) {
+          return { role: 'user', content: userContent };
+        }
+        return msg;
+      });
 
     // Call AWS Bedrock for real AI chat response
     const rawAiResponse = await chatWithClaude(systemPromptWithContext, formattedHistory);

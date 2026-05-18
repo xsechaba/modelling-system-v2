@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import WizardLayoutClient from "@/components/WizardLayoutClient";
+import { WizardProvider } from "@/components/WizardContext";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -31,9 +32,15 @@ export default async function WizardLayout({
     where: { email: session.user.email },
   });
 
+  const initialCompletedSteps: string[] = project.state?.completedSteps
+    ? JSON.parse(project.state.completedSteps)
+    : [];
+
   return (
-    <WizardLayoutClient project={project} projectId={projectId} user={user}>
-      {children}
-    </WizardLayoutClient>
+    <WizardProvider initialCompletedSteps={initialCompletedSteps}>
+      <WizardLayoutClient project={project} projectId={projectId} user={user}>
+        {children}
+      </WizardLayoutClient>
+    </WizardProvider>
   );
 }

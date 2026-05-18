@@ -68,7 +68,24 @@ export function extractJSON(text: string): { json: any; remainingText: string } 
     // Try to find a raw JSON object
     const firstBrace = text.indexOf('{');
     const lastBrace = text.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const firstBracket = text.indexOf('[');
+    const lastBracket = text.lastIndexOf(']');
+
+    // Determine whether an array or object appears first in the text
+    const hasArray = firstBracket !== -1 && lastBracket > firstBracket;
+    const hasObject = firstBrace !== -1 && lastBrace > firstBrace;
+    const arrayFirst = hasArray && (!hasObject || firstBracket < firstBrace);
+
+    if (arrayFirst) {
+      const jsonStr = text.substring(firstBracket, lastBracket + 1);
+      const json = JSON.parse(jsonStr);
+      const before = text.substring(0, firstBracket).trim();
+      const after = text.substring(lastBracket + 1).trim();
+      const remainingText = [before, after].filter(Boolean).join('\n');
+      return { json, remainingText };
+    }
+
+    if (hasObject) {
       const jsonStr = text.substring(firstBrace, lastBrace + 1);
       const json = JSON.parse(jsonStr);
       const before = text.substring(0, firstBrace).trim();

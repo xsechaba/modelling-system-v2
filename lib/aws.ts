@@ -8,3 +8,5 @@ export const awsConfig = {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
 };
+
+export const S3_BUCKET = process.env.S3_BUCKET_NAME || 'dim-wiz-uploads';

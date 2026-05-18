@@ -6,9 +6,15 @@ const client = new BedrockRuntimeClient(awsConfig);
 
 const MODEL_ID = 'anthropic.claude-3-sonnet-20240229-v1:0';
 
+// A content block is either a plain text string or a multimodal array
+// (Anthropic Messages API supports both forms)
+type TextContent = string;
+type ImageContent = { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
+type ContentBlock = TextContent | (Array<{ type: 'text'; text: string } | ImageContent>);
+
 interface Message {
   role: 'user' | 'assistant';
-  content: string;
+  content: ContentBlock;
 }
 
 interface AskClaudeOptions {
@@ -82,7 +88,15 @@ export async function chatWithClaude(
         const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
         if (lastMsg.role === msg.role) {
             // Combine consecutive messages of the same role
-            lastMsg.content += `\n\n${msg.content}`;
+            // Only combine if both are plain strings (can't merge multimodal blocks)
+            if (typeof lastMsg.content === 'string' && typeof msg.content === 'string') {
+              lastMsg.content += `\n\n${msg.content}`;
+            } else {
+              // For multimodal, insert a neutral turn to maintain alternation
+              const bridgeRole = lastMsg.role === 'user' ? 'assistant' : 'user';
+              sanitizedMessages.push({ role: bridgeRole, content: '...' });
+              sanitizedMessages.push(msg);
+            }
         } else {
             sanitizedMessages.push(msg);
         }

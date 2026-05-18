@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Activity, AlertTriangle, CheckCircle2, Clock, PlayCircle, Settings, ShieldAlert, Terminal, RefreshCw, BarChart2 } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Clock, PlayCircle, Settings, ShieldAlert, Terminal, RefreshCw, BarChart2, Database } from 'lucide-react';
 
 export default function MaintenancePage() {
   const { projectId } = useParams() as { projectId: string };

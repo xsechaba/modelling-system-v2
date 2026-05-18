@@ -1,9 +1,10 @@
 'use client';
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import { Box, Settings, Database, FolderGit2, Activity, ChevronRight, LayoutDashboard, TerminalSquare, LogOut } from 'lucide-react';
+import { useWizard } from './WizardContext';
 
 const steps = [
   { id: 'upload', label: 'Data', fullLabel: 'Ingest Data' },
@@ -26,6 +27,8 @@ export default function WizardLayoutClient({
   user: any;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { completedSteps } = useWizard();
   const currentStepIndex = steps.findIndex(step => pathname?.includes(step.id));
   const activeIndex = currentStepIndex === -1 ? 0 : currentStepIndex;
 
@@ -65,7 +68,6 @@ export default function WizardLayoutClient({
           {/* Workspace Tabs */}
           <div style={{ display: 'flex', alignItems: 'flex-end', height: '100%', gap: '2px', marginLeft: '24px' }}>
             {steps.map((step, idx) => {
-              const completedSteps = project.state?.completedSteps ? JSON.parse(project.state.completedSteps) : [];
               const hasKnowledge = completedSteps.includes(step.id);
               const isCurrent = idx === activeIndex;
 
@@ -131,10 +133,10 @@ export default function WizardLayoutClient({
           padding: '16px 0',
           gap: '24px'
         }}>
-          <button style={{ background: 'transparent', border: 'none', color: 'var(--color-white)', cursor: 'pointer' }}><LayoutDashboard size={20} strokeWidth={1.5} /></button>
-          <button style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><Database size={20} strokeWidth={1.5} /></button>
-          <button style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><FolderGit2 size={20} strokeWidth={1.5} /></button>
-          <button style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><TerminalSquare size={20} strokeWidth={1.5} /></button>
+          <button onClick={() => router.push(`/projects/${projectId}`)} title="Project Overview" style={{ background: 'transparent', border: 'none', color: 'var(--color-white)', cursor: 'pointer' }}><LayoutDashboard size={20} strokeWidth={1.5} /></button>
+          <button onClick={() => router.push(`/wizard/${projectId}/upload`)} title="Data Ingestion" style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><Database size={20} strokeWidth={1.5} /></button>
+          <button onClick={() => router.push(`/wizard/${projectId}/requirements`)} title="Requirements" style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><FolderGit2 size={20} strokeWidth={1.5} /></button>
+          <button onClick={() => router.push(`/wizard/${projectId}/export`)} title="Code Generation & Export" style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><TerminalSquare size={20} strokeWidth={1.5} /></button>
           
           <div style={{ flex: 1 }} />
           <Link href="/settings/profile" style={{ color: 'var(--color-white-muted)' }}><Settings size={20} strokeWidth={1.5} /></Link>

@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { UploadCloud, File, X, ArrowRight, Database, Plug, Plus, Search, Server, CheckSquare, Square, Loader2, CheckCircle2 } from 'lucide-react';
+import { useWizard } from '@/components/WizardContext';
 
 interface UploadedFile {
   file?: File;
@@ -18,6 +19,8 @@ function formatBytes(bytes: number): string {
 
 export default function UploadPage() {
   const router = useRouter();
+  const { projectId } = useParams() as { projectId: string };
+  const { markStepComplete } = useWizard();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [activeTab, setActiveTab] = useState<'upload' | 'database' | 'docs'>('upload');
@@ -31,8 +34,6 @@ export default function UploadPage() {
   const [dbCreds, setDbCreds] = useState({ host: '', port: '5432', database: '', user: '', password: '' });
   const [dbConnecting, setDbConnecting] = useState(false);
   const [dbError, setDbError] = useState('');
-
-  const { projectId } = useParams() as { projectId: string };
 
   // Load previously saved state on mount
   useEffect(() => {
@@ -199,6 +200,7 @@ export default function UploadPage() {
 
     try {
       const formData = new FormData();
+      formData.append('projectId', projectId);
       for (const uf of newFiles) {
         if (uf.file) formData.append('files', uf.file);
       }
@@ -230,6 +232,8 @@ export default function UploadPage() {
       setAlreadyProfiled(true);
 
       // Navigate to profiling page
+      markStepComplete('upload');
+      router.refresh();
       setTimeout(() => router.push(`/wizard/${projectId}/profile`), 400);
     } catch (err: any) {
       alert('Failed to profile: ' + err.message);

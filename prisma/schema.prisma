@@ -131,6 +131,8 @@ model UploadedFile {
   uploadedAt     DateTime @default(now())
 
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, filename])
 }
 
 model AuditLog {

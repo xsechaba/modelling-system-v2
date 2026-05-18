@@ -24,13 +24,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // Build context
-    const requirements = knowledge.kpis ? JSON.stringify(knowledge.kpis) : 'No explicit KPIs defined.';
+    const requirements = knowledge.bankedRequirements
+      ? JSON.stringify(knowledge.bankedRequirements)
+      : knowledge.kpis
+        ? JSON.stringify(knowledge.kpis)
+        : 'No explicit requirements defined.';
     const profilingContext = knowledge.profileResults ? JSON.stringify(knowledge.profileResults) : 'No profiling data available.';
     const matrixContext = JSON.stringify(busMatrix);
     
     const systemPrompt = `${PROMPTS.SCHEMA_GENERATOR}
     
-=== GATHERED REQUIREMENTS (KPIs) ===
+=== BANKED REQUIREMENTS (KPIs, Processes, Dimensions, Rules — WITH FORMULAS) ===
 ${requirements}
 
 === BUS MATRIX ===
