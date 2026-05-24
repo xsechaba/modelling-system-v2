@@ -24,16 +24,85 @@ export async function POST(req: NextRequest) {
         const arrayBuffer = await blob.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         const text = buffer.toString('utf-8');
-        const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-        const rows = parsed.data as Record<string, string>[];
-        const headers = parsed.meta.fields || [];
 
-        const columns = headers.map(h => {
-          const values = rows.map(r => r[h] ?? '');
-          return profileColumn(h, values);
+        const PROFILE_SAMPLE_LIMIT = 50_000;
+
+        // Fast row count from raw text — avoids parsing all rows just to get a count.
+        // Subtract 1 for the header line; handle optional trailing newline.
+        const newlineCount = (text.match(/\n/g) || []).length;
+        const rowCount = Math.max(0, newlineCount - (text.endsWith('\n') ? 1 : 0));
+
+        // Stream-parse with PapaParse step callback and abort after PROFILE_SAMPLE_LIMIT rows.
+        // For a 1M-row file this avoids building a 1M-element JS array in memory.
+        const profilingRows: Record<string, string>[] = [];
+        let headers: string[] = [];
+
+        await new Promise<void>((resolve) => {
+          Papa.parse(text, {
+            header: true,
+            skipEmptyLines: true,
+            step: (result: any, parser: any) => {
+              if (!headers.length && result.meta?.fields) {
+                headers = result.meta.fields as string[];
+              }
+              if (profilingRows.length < PROFILE_SAMPLE_LIMIT) {
+                profilingRows.push(result.data as Record<string, string>);
+              } else {
+                parser.abort(); // stop immediately — do not process remaining rows
+              }
+            },
+            complete: () => resolve(),
+            error: () => resolve(),
+          });
         });
 
-        const sampleRows = rows.slice(0, 15).map(row => {
+        // Compute ACTUAL unique counts from the FULL file (not just the sample).
+        // This is a cheap O(n) pass using Sets per column. For very large files (>1M rows),
+        // we stream through the full file but only track unique values per column.
+        let actualUniqueCounts: Record<string, number> | undefined;
+        if (rowCount > PROFILE_SAMPLE_LIMIT) {
+          const uniqueSets: Record<string, Set<string>> = {};
+          for (const h of headers) {
+            uniqueSets[h] = new Set<string>();
+          }
+          await new Promise<void>((resolve) => {
+            Papa.parse(text, {
+              header: true,
+              skipEmptyLines: true,
+              step: (result: any) => {
+                const row = result.data as Record<string, string>;
+                for (const h of headers) {
+                  const val = row[h];
+                  if (val != null && val !== '') {
+                    uniqueSets[h].add(val);
+                  }
+                }
+              },
+              complete: () => resolve(),
+              error: () => resolve(),
+            });
+          });
+          actualUniqueCounts = {};
+          for (const h of headers) {
+            actualUniqueCounts[h] = uniqueSets[h].size;
+          }
+        }
+
+        const columns = headers.map((h: string) => {
+          const values = profilingRows.map(r => r[h] ?? '');
+          const col = profileColumn(h, values);
+          // Override unique counts with actual values from full-file pass
+          if (actualUniqueCounts && actualUniqueCounts[h] !== undefined) {
+            col.uniqueCount = actualUniqueCounts[h];
+            col.uniquePct = col.total > 0 ? Math.round((actualUniqueCounts[h] / rowCount) * 1000) / 10 : 0;
+            col.uniqueDisplay = actualUniqueCounts[h] > 1000 ? `${(actualUniqueCounts[h] / 1000).toFixed(1)}k` : String(actualUniqueCounts[h]);
+            col.sampledUniqueCount = new Set(values.filter((v: string) => v !== '' && v != null)).size;
+            col.totalRowCount = rowCount;
+          }
+          return col;
+        });
+
+        const sampleRows = profilingRows.slice(0, 15).map(row => {
           const clean: Record<string, string> = {};
           for (const h of headers) {
             clean[h] = row[h] ?? '';
@@ -55,7 +124,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        files.push({ name: blob.name, size: blob.size, columns, rowCount: rows.length, sampleRows, s3Key });
+        files.push({ name: blob.name, size: blob.size, columns, rowCount, sampleRows, s3Key });
       }
     }
 

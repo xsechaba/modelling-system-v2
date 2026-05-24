@@ -17,6 +17,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     });
 
     if (!state) {
+      // Validate the project actually exists before creating state (prevents FK constraint 500)
+      const project = await prisma.project.findUnique({ where: { id } });
+      if (!project) {
+        return new NextResponse('Project not found', { status: 404 });
+      }
       // If no state exists, initialize one
       const newState = await prisma.projectState.create({
         data: {

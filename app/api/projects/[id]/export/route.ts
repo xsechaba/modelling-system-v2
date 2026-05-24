@@ -29,6 +29,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
        return NextResponse.json({ files: [] });
     }
 
+    // ── Cache check: return saved code if schema hasn't changed since it was generated ──
+    const schemaAt: number = parsed.schemaGeneratedAt || 0;
+    const codeAt: number = parsed.codeGeneratedAt || 0;
+    if (parsed.generatedCode && Array.isArray(parsed.generatedCode) && codeAt >= schemaAt) {
+      return NextResponse.json({ files: parsed.generatedCode });
+    }
+
     // Prefer bankedRequirements (with formulas) over legacy kpis
     const bankedRequirements: any[] = parsed.bankedRequirements || [];
     const kpis = bankedRequirements.filter((r: any) => r.type === 'kpi');
@@ -307,6 +314,18 @@ ${parsed.aiInterpretation ? parsed.aiInterpretation.slice(0, 1500) : 'No profile
     md += `\n`;
 
     files.push({ name: 'documentation.md', type: 'md', content: md });
+
+    // ── Persist generated files to state so subsequent visits are instant ──
+    try {
+      parsed.generatedCode = files;
+      parsed.codeGeneratedAt = Date.now();
+      await prisma.projectState.update({
+        where: { projectId: id },
+        data: { stateData: JSON.stringify(parsed) },
+      });
+    } catch (saveErr) {
+      console.warn('Failed to cache generated code:', saveErr);
+    }
 
     return NextResponse.json({ files });
   } catch (error) {

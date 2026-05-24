@@ -21,10 +21,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const bankedReqs = knowledge.bankedRequirements ? JSON.stringify(knowledge.bankedRequirements) : 'No banked requirements available.';
     const profilingContext = knowledge.profileResults ? JSON.stringify(knowledge.profileResults) : 'No profiling data available.';
     
+    // Pre-extract explicit lists so Claude can't accidentally miss any
+    const reqList = knowledge.bankedRequirements || [];
+    const processList = reqList.filter((r: any) => r.type === 'process').map((r: any) => r.name);
+    const dimensionList = reqList.filter((r: any) => r.type === 'dimension').map((r: any) => r.name);
+    
     const systemPrompt = `${PROMPTS.BUS_MATRIX_GENERATOR}
     
     === BANKED REQUIREMENTS (INPUT) ===
     ${bankedReqs}
+    
+    === EXPLICIT PROCESS LIST (${processList.length} total — each MUST become a row) ===
+    ${processList.map((p: string, i: number) => `${i + 1}. ${p}`).join('\n    ')}
+    
+    === EXPLICIT DIMENSION LIST (${dimensionList.length} total — each MUST appear as a column) ===
+    ${dimensionList.map((d: string, i: number) => `${i + 1}. ${d}`).join('\n    ')}
     
     === SOURCE DATA PROFILING (CONTEXT) ===
     ${profilingContext}

@@ -25,10 +25,13 @@ const ID_NAME = /\b(id|key|uuid|guid|hash|token|ref|reference|sku|serial|barcode
 const DATE_NAME = /\b(date|time|datetime|timestamp|created|updated|modified|_at|_on)\b/i;
 
 /** Columns that look like geographic / telephone codes, NOT numeric measures */
-const CODE_NAME = /\b(zip|postal|postcode|phone|fax|cep|prefix|area_code|phone_number|zipcode)\b/i;
+const CODE_NAME = /\b(zip|postal|postcode|phone|fax|cep|prefix|area_code|phone_number|zipcode|zip_code)\b/i;
 
 /** Columns that are likely monetary — only these get $ formatting */
 const CURRENCY_NAME = /\b(price|cost|revenue|amount|value|payment|total|subtotal|fee|tax|discount|salary|wage|income|spend|budget|earning|freight)\b/i;
+
+/** Columns whose names indicate a numeric measure (length, weight, height, count, etc.) */
+const NUMERIC_NAME = /\b(length|lenght|width|height|depth|weight|volume|count|qty|quantity|score|rating|number|num|size|distance|duration|age|days|hours|minutes|seconds|installments|sequential)\b/i;
 
 /** Columns that are strongly categorical by nature */
 const CATEGORICAL_NAME = /\b(status|state|type|category|class|group|level|tier|gender|country|city|region|department|color|colour|size|segment|flag|channel|source|rating|grade|priority)\b/i;
@@ -95,6 +98,7 @@ export function inferType(values: string[], columnName = ''): ColumnTypeInfo {
 
   if (numericRatio > 0.8) {
     const nameLooksCode = CODE_NAME.test(columnName);
+    const nameLooksNumeric = NUMERIC_NAME.test(columnName);
     if (!nameLooksCode) {
       // Guard: if all numerics are exactly the same short length, treat as a code
       // (zip codes: all 5-digit; FIPS codes: all 5-digit; year: all 4-digit etc.)
@@ -103,7 +107,8 @@ export function inferType(values: string[], columnName = ''): ColumnTypeInfo {
       const maxLen = Math.max(...lengths);
       const isFixedLen = maxLen === minLen && maxLen <= 5;
 
-      if (!isFixedLen) {
+      // If column name strongly suggests numeric (e.g., "product_name_lenght"), override fixed-length guard
+      if (!isFixedLen || nameLooksNumeric) {
         return { type: 'numeric', label: 'NUMERIC', color: '#00b4ff', bgColor: 'rgba(0,180,255,0.1)' };
       }
       // Fixed-length short numerics (zip, postcode) fall through to categorical
@@ -206,7 +211,9 @@ export function profileColumn(name: string, values: string[]): Record<string, an
     if (nums.some(n => n < 0)) flags.push({ label: 'HAS NEGATIVES', color: '#ff5f56' });
     if (nums.length > 10) {
       const mean = nums.reduce((s, n) => s + n, 0) / nums.length;
-      const max = Math.max(...nums);
+      // Iterative max — avoids Math.max(...nums) stack overflow on large arrays
+      let max = -Infinity;
+      for (const n of nums) if (n > max) max = n;
       if (max > mean * 5) flags.push({ label: 'OUTLIERS', color: '#ff9900' });
     }
   }

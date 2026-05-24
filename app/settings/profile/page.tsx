@@ -21,7 +21,7 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#050505' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-page)' }}>
       {/* App Header */}
       <nav style={{
         height: '64px',
@@ -29,7 +29,7 @@ export default async function ProfilePage() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'rgba(5, 5, 5, 0.8)',
+        background: 'var(--bg-nav)',
         borderBottom: '1px solid var(--color-border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

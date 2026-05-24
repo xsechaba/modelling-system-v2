@@ -29,7 +29,32 @@ export interface BusinessRule {
   description: string;
 }
 
+export interface TechnicalConfig {
+  factPrefix: string;       // e.g. 'fct_', 'fact_', 'f_', ''
+  dimPrefix: string;        // e.g. 'dim_', 'd_', ''
+  keySuffix: string;        // e.g. '_key', '_sk', '_id'
+  surrogateKeyStrategy: 'integer' | 'uuid' | 'hash';
+  naturalKeyInclude: boolean; // always include natural/business key alongside surrogate
+  columnNamingStyle: 'snake_case' | 'camelCase' | 'PascalCase';
+  stripSourcePrefixes: boolean; // strip file-specific prefixes from dim columns
+  scdType2Enabled: boolean; // add SCD2 columns (effective_date, expiry_date, is_current)
+}
+
+export const DEFAULT_TECHNICAL_CONFIG: TechnicalConfig = {
+  factPrefix: 'fct_',
+  dimPrefix: 'dim_',
+  keySuffix: '_key',
+  surrogateKeyStrategy: 'integer',
+  naturalKeyInclude: true,
+  columnNamingStyle: 'snake_case',
+  stripSourcePrefixes: true,
+  scdType2Enabled: false,
+};
+
 export interface KnowledgeContext {
+  // Technical configuration
+  technicalConfig?: TechnicalConfig;
+
   // Data knowledge
   uploadedFiles?: FileMetadata[];
   profileResults?: ProfileResults;
@@ -52,6 +77,8 @@ export interface KnowledgeContext {
   busMatrix?: any;
   schema?: any;
   schemaHistory?: any[];
+  schemaGeneratedAt?: number;
+  busMatrixGeneratedAt?: number;
 
   // Output knowledge
   generatedCode?: any[];

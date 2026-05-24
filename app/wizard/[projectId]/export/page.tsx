@@ -1,13 +1,15 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ArrowRight, Code, Download, FileJson, FileText, CheckCircle2, Copy, Terminal, ChevronRight, Folder, Loader2 } from 'lucide-react';
 import { renderAIResponse } from '@/lib/markdown';
 
 export default function ExportPage() {
   const { projectId } = useParams() as { projectId: string };
+  const router = useRouter();
   const [generating, setGenerating] = useState(true);
+  const [navigating, setNavigating] = useState(false);
   const [files, setFiles] = useState<{name: string, type: string, content: string}[]>([]);
   const [activeFile, setActiveFile] = useState<{name: string, type: string, content: string} | null>(null);
 
@@ -41,7 +43,7 @@ export default function ExportPage() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       
       {/* Workspace Header */}
-      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#050505' }}>
+      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-page)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <h1 className="heading-font" style={{ fontSize: '1.25rem' }}>Compiler Output</h1>
         </div>
@@ -49,9 +51,17 @@ export default function ExportPage() {
           <button className="btn-secondary" style={{ padding: '6px 12px', gap: '8px', display: 'flex', fontSize: '0.8125rem' }}>
              <Download size={14} /> Output ZIP
           </button>
-          <Link href={`/wizard/${projectId}/deploy`} className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.875rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            Schedule & Deploy <ArrowRight size={14} />
-          </Link>
+          <button
+            onClick={() => {
+              setNavigating(true);
+              router.push(`/wizard/${projectId}/deploy`);
+            }}
+            disabled={generating || navigating}
+            className="btn-primary"
+            style={{ padding: '8px 16px', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', cursor: generating || navigating ? 'not-allowed' : 'pointer', opacity: generating ? 0.5 : 1 }}
+          >
+            {navigating ? <><Loader2 size={14} className="spin-icon" /> Loading...</> : <>Schedule &amp; Deploy <ArrowRight size={14} /></>}
+          </button>
         </div>
       </div>
 
@@ -91,20 +101,25 @@ export default function ExportPage() {
         </div>
 
         {/* Right Panel: Editor + Terminal */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0a0a0a', position: 'relative' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', position: 'relative' }}>
           
           {generating ? (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', zIndex: 10, background: '#0a0a0a' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', zIndex: 10, background: 'var(--bg-surface)' }}>
               <Loader2 size={40} color="var(--color-green)" className="spin-icon" />
               <div style={{ fontSize: '0.875rem', fontFamily: 'monospace', color: 'var(--color-white-muted)' }}>dbt compile --select marts.*</div>
               <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } .spin-icon { animation: spin 1.5s linear infinite; }`}</style>
+            </div>
+          ) : navigating ? (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', zIndex: 10, background: 'var(--bg-surface)' }}>
+              <Loader2 size={32} color="var(--color-green)" className="spin-icon" />
+              <div style={{ fontSize: '0.875rem', color: 'var(--color-white-muted)' }}>Loading deployment stage...</div>
             </div>
           ) : (
             <>
               {/* Code Editor */}
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', height: '40px', justifyContent: 'space-between', alignItems: 'center', paddingRight: '16px' }}>
-                   <div style={{ padding: '0 16px', borderRight: '1px solid var(--color-border)', borderTop: '2px solid var(--color-green)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem', background: '#0a0a0a', height: '100%' }}>
+                   <div style={{ padding: '0 16px', borderRight: '1px solid var(--color-border)', borderTop: '2px solid var(--color-green)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem', background: 'var(--bg-surface)', height: '100%' }}>
                      {activeFile?.type === 'sql' ? <Code size={14} color="var(--color-green)" /> : activeFile?.type === 'md' ? <FileText size={14} color="var(--color-green)" /> : <FileJson size={14} color="var(--color-green)" />} {activeFile?.name}
                    </div>
                    <button onClick={copyToClipboard} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
@@ -119,9 +134,9 @@ export default function ExportPage() {
                    </div>
                    {/* Code content */}
                    {activeFile?.type === 'md' ? (
-                       <div style={{ padding: '0 16px', color: '#e0e0e0', fontSize: '0.875rem', lineHeight: 1.6, flex: 1, overflowX: 'auto', fontFamily: 'sans-serif' }} dangerouslySetInnerHTML={{ __html: renderAIResponse(activeFile.content) }} />
+                       <div style={{ padding: '0 16px', color: 'var(--color-white)', fontSize: '0.875rem', lineHeight: 1.6, flex: 1, overflowX: 'auto', fontFamily: 'sans-serif' }} dangerouslySetInnerHTML={{ __html: renderAIResponse(activeFile.content) }} />
                    ) : (
-                       <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.875rem', lineHeight: 1.5, color: '#e0e0e0', flex: 1, overflowX: 'auto', paddingRight: '16px' }}>
+                       <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.875rem', lineHeight: 1.5, color: 'var(--color-white)', flex: 1, overflowX: 'auto', paddingRight: '16px' }}>
                         <code>
                           {activeFile?.content.split('\n').map((line, i) => (
                             <div key={i} dangerouslySetInnerHTML={{ __html: line.replace(/\{\{/g, '<span style="color: #ffbd2e">{{').replace(/\}\}/g, '}}</span>').replace(/(SELECT|FROM|WITH|AS|CAST)/g, '<span style="color: #c678dd">$1</span>') }} />
@@ -133,7 +148,7 @@ export default function ExportPage() {
               </div>
 
               {/* Terminal View */}
-              <div style={{ height: '200px', borderTop: '1px solid var(--color-border)', background: '#050505', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ height: '200px', borderTop: '1px solid var(--color-border)', background: 'var(--bg-page)', display: 'flex', flexDirection: 'column' }}>
                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderBottom: '1px solid var(--color-border)', fontSize: '0.75rem', color: 'var(--color-white-muted)', textTransform: 'uppercase' }}>
                    <Terminal size={14} /> Output logs
                  </div>

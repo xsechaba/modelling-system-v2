@@ -30,13 +30,13 @@ export default function BusMatrixPage() {
           if (parsed.busMatrix) {
             setDimensions(parsed.busMatrix.dimensions || []);
             setMatrix(parsed.busMatrix.matrix || []);
-            // Check staleness: requirements banked after bus matrix was generated
-            const reqAt = parsed.requirementsBankedAt || 0;
+            // Check staleness: requirements updated after bus matrix was last generated
+            const reqAt = parsed.requirementsUpdatedAt || parsed.requirementsBankedAt || 0;
             const matrixAt = parsed.busMatrixGeneratedAt || 0;
             if (reqAt > matrixAt && matrixAt > 0) setIsStale(true);
             setLoading(false);
           } else {
-            // Empty state
+            // No matrix yet — if requirements exist, show the Generate prompt prominently
             setLoading(false);
           }
         }
@@ -166,7 +166,7 @@ export default function BusMatrixPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, padding: '32px', overflowY: 'auto', background: '#050505' }}>
+      <div style={{ flex: 1, padding: '32px', overflowY: 'auto', background: 'var(--bg-page)' }}>
         
         {/* Staleness warning */}
         {isStale && (

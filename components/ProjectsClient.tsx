@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
-import { ArrowRight, Folder, FolderPlus, Clock, GitBranch, Users, Settings, Database, Play, LogOut } from 'lucide-react';
+import { ArrowRight, Folder, FolderPlus, Clock, GitBranch, Users, Settings, Database, Play, LogOut, Moon, Sun } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from '@/lib/theme';
 
 export default function ProjectsClient({ user, initialProjects }: { user: any, initialProjects: any[] }) {
   const [showNewProject, setShowNewProject] = useState(false);
@@ -12,6 +13,7 @@ export default function ProjectsClient({ user, initialProjects }: { user: any, i
   // Create project form state
   const [newProjectData, setNewProjectData] = useState({ name: '', access: 'Private', repo: '', entryPath: 'data-first' });
   const [isCreating, setIsCreating] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const getInitials = (name: string) => {
     if (!name) return 'U';
@@ -42,7 +44,7 @@ export default function ProjectsClient({ user, initialProjects }: { user: any, i
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#050505' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-black)' }}>
       
       {/* App Header */}
       <nav style={{
@@ -51,7 +53,8 @@ export default function ProjectsClient({ user, initialProjects }: { user: any, i
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'rgba(5, 5, 5, 0.8)',
+        background: 'var(--color-glass)',
+        backdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--color-border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -70,6 +73,13 @@ export default function ProjectsClient({ user, initialProjects }: { user: any, i
                 {getInitials(user?.name || user?.email)}
               </div>
             </Link>
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{ background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '4px 8px', color: 'var(--color-white-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem' }}
+            >
+              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
             <button onClick={() => signOut({ callbackUrl: '/' })} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}>
               <LogOut size={16} />
             </button>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowRight, AlertTriangle, Search, CheckCircle2, FileText, Hash, Calendar, Key, BarChart2, Loader2, Database } from 'lucide-react';
 import { renderAIResponse } from '@/lib/markdown';
+import { useWizard } from '@/components/WizardContext';
 
 interface ColumnProfile {
   name: string;
@@ -78,6 +79,7 @@ export default function ProfilePage() {
   
   const [aiInterpretation, setAiInterpretation] = useState<string | null>(null);
   const [interpreting, setInterpreting] = useState(false);
+  const { markStepComplete } = useWizard();
 
   useEffect(() => {
     const fetchState = async () => {
@@ -121,6 +123,7 @@ export default function ProfilePage() {
 
       const data = await res.json();
       setAiInterpretation(data.interpretation);
+      markStepComplete('profile');
     } catch (e) {
       console.error("Failed to generate interpretation:", e);
       setAiInterpretation("An error occurred while connecting to the AI Agent. Please check your console or server logs.");
@@ -159,6 +162,7 @@ export default function ProfilePage() {
           completedSteps
         })
       });
+      markStepComplete('profile');
       router.push(`/wizard/${projectId}/requirements`);
     } catch (e) {
       console.error(e);
@@ -180,7 +184,7 @@ export default function ProfilePage() {
         </button>
       </div>
 
-      <div style={{ flex: 1, position: 'relative', background: '#050505' }}>
+      <div style={{ flex: 1, position: 'relative', background: 'var(--bg-surface)' }}>
         {loading ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
              <Loader2 size={40} color="var(--color-green)" className="spin-icon" />
@@ -205,11 +209,11 @@ export default function ProfilePage() {
               
               {/* Callouts Panel */}
               {callouts.length > 0 && (
-                <div style={{ padding: '24px', background: 'var(--color-black-light)', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-white)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ padding: '24px', background: 'var(--color-black-light)', border: '1px solid var(--color-border)', borderRadius: '8px', maxHeight: '320px', display: 'flex', flexDirection: 'column' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-white)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <BarChart2 size={16} color="var(--color-green)" /> Key Profiling Callouts
                   </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', overflowY: 'auto', flex: 1, paddingRight: '8px' }}>
                     {callouts.slice(0, 3).map((callout, i) => {
                       const config = SEVERITY_CONFIG[callout.severity];
                       const Icon = config.icon;
@@ -231,8 +235,8 @@ export default function ProfilePage() {
               )}
 
               {/* AI Interpretation Panel */}
-              <div style={{ padding: '24px', background: 'rgba(134,188,37,0.02)', border: '1px solid rgba(134,188,37,0.2)', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-green)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ padding: '24px', background: 'rgba(134,188,37,0.02)', border: '1px solid rgba(134,188,37,0.2)', borderRadius: '8px', display: 'flex', flexDirection: 'column', maxHeight: '320px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-green)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 2L2 7.5V16.5L12 22L22 16.5V7.5L12 2Z" fill="var(--color-green)" fillOpacity="0.1" stroke="var(--color-green)" strokeWidth="2" strokeLinejoin="round" />
                     <circle cx="12" cy="12" r="3" fill="#000" stroke="var(--color-green)" strokeWidth="2"/>
@@ -258,8 +262,8 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* File tabs */}
-            <div style={{ display: 'flex', gap: '32px', marginBottom: '16px', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px', flexShrink: 0 }}>
+            {/* File tabs — horizontally scrollable when many files */}
+            <div className="profile-file-tabs" style={{ display: 'flex', gap: '32px', marginBottom: '16px', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px', flexShrink: 0, overflowX: 'auto', flexWrap: 'nowrap' }}>
               {profileData.files.map((file, i) => (
                 <button
                   key={i}

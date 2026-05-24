@@ -38,7 +38,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', background: '#050505', color: 'var(--color-white)' }}>
+    <div style={{ height: '100vh', display: 'flex', background: 'var(--bg-page)', color: 'var(--color-white)' }}>
       {/* Left side - Branding */}
       <div style={{ flex: 1, borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '48px', background: 'radial-gradient(circle at 0% 0%, rgba(134,188,37,0.15) 0%, transparent 50%)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

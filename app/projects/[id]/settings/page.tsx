@@ -22,14 +22,14 @@ export default async function ProjectSettings({ params }: { params: Promise<{ id
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#050505', color: 'var(--color-white)' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-page)', color: 'var(--color-white)' }}>
       {/* App Header */}
       <nav style={{
         height: '64px',
         padding: '0 32px',
         display: 'flex',
         alignItems: 'center',
-        background: 'rgba(5, 5, 5, 0.8)',
+        background: 'var(--color-glass)',
         borderBottom: '1px solid var(--color-border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

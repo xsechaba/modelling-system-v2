@@ -3,16 +3,19 @@ import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
-import { Box, Settings, Database, FolderGit2, Activity, ChevronRight, LayoutDashboard, TerminalSquare, LogOut } from 'lucide-react';
+import { Box, Settings, Database, FolderGit2, ChevronRight, LayoutDashboard, TerminalSquare, LogOut, Moon, Sun } from 'lucide-react';
 import { useWizard } from './WizardContext';
+import { useTheme } from '@/lib/theme';
 
 const steps = [
   { id: 'upload', label: 'Data', fullLabel: 'Ingest Data' },
+  { id: 'settings', label: 'Config', fullLabel: 'Technical Configuration' },
   { id: 'profile', label: 'Profiling', fullLabel: 'Data Profiling' },
   { id: 'requirements', label: 'Requirements', fullLabel: 'Business Requirements' },
   { id: 'bus-matrix', label: 'Bus Matrix', fullLabel: 'Bus Matrix' },
   { id: 'review', label: 'Schema Editor', fullLabel: 'Schema Editor' },
   { id: 'export', label: 'Code Gen', fullLabel: 'Code Generation' },
+  { id: 'deploy', label: 'Deploy', fullLabel: 'Deploy to Database' },
 ];
 
 export default function WizardLayoutClient({
@@ -31,6 +34,7 @@ export default function WizardLayoutClient({
   const { completedSteps } = useWizard();
   const currentStepIndex = steps.findIndex(step => pathname?.includes(step.id));
   const activeIndex = currentStepIndex === -1 ? 0 : currentStepIndex;
+  const { theme, toggleTheme } = useTheme();
 
   const getInitials = (name: string) => {
     if (!name) return 'U';
@@ -38,17 +42,17 @@ export default function WizardLayoutClient({
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#000000', color: 'var(--color-white)', overflow: 'hidden' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--color-black)', color: 'var(--color-white)', overflow: 'hidden' }}>
       
       {/* Top Application Bar */}
-      <nav style={{
+      <nav className="wiz-nav" style={{
         height: '50px',
         borderBottom: '1px solid var(--color-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 16px',
-        background: '#050505',
+        background: 'var(--color-black)',
         fontSize: '0.875rem'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -106,10 +110,14 @@ export default function WizardLayoutClient({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: 'var(--color-white-muted)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', background: 'rgba(0,255,102,0.1)', color: 'var(--color-green)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(0,255,102,0.2)' }}>
-            <Activity size={12} /> Live Session Active
-          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: 'var(--color-white-muted)' }}>
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{ background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '4px 8px', color: 'var(--color-white-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem' }}
+          >
+            {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+          </button>
           <Link href="/settings/profile" style={{ textDecoration: 'none' }}>
             <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-white)' }}>
                {getInitials(user?.name || user?.email)}
@@ -123,10 +131,10 @@ export default function WizardLayoutClient({
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Real App IDE-like Sidebar */}
-        <aside style={{
+        <aside className="wiz-sidebar" style={{
           width: '56px',
           borderRight: '1px solid var(--color-border)',
-          background: '#050505',
+          background: 'var(--color-black)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -143,7 +151,7 @@ export default function WizardLayoutClient({
         </aside>
 
         {/* Main Interface */}
-        <main style={{ flex: 1, position: 'relative', overflowY: 'auto', background: '#0a0a0a' }}>
+        <main className="wiz-content" style={{ flex: 1, position: 'relative', overflowY: 'auto', background: '#0a0a0a' }}>
           <div
             key={pathname}
             className="animate-fade-in"

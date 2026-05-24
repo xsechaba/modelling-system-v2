@@ -130,7 +130,7 @@ export default async function ProjectDashboard({ params }: { params: Promise<{ i
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#050505', color: 'var(--color-white)' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-page)', color: 'var(--color-white)' }}>
       {/* App Header */}
       <nav style={{
         height: '64px',
@@ -138,7 +138,7 @@ export default async function ProjectDashboard({ params }: { params: Promise<{ i
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'rgba(5, 5, 5, 0.8)',
+        background: 'var(--color-glass)',
         borderBottom: '1px solid var(--color-border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

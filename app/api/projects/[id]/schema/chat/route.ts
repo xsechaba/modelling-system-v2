@@ -125,10 +125,47 @@ ${JSON.stringify(claudeSchemaContext, null, 2)}
                 source: e.target, 
                 target: e.source,
                 animated: true,
-                style: { stroke: 'rgba(255,255,255,0.3)', strokeWidth: 2 }
+                style: { stroke: 'rgba(255,255,255,0.3)', strokeWidth: 2 },
+                markerEnd: { type: 'arrowclosed', width: 20, height: 20 }
             });
         });
     }
+
+    // ── FK COHERENCE SAFETY NET ─────────────────────────────────────────────
+    // For every edge, ensure the appropriate parent node has a FK column for the linked child.
+    // Dim→Fact edges: FK goes in the fact table. Dim→Dim edges: FK goes in the parent dim.
+    edges.forEach((edge: any) => {
+      // In ReactFlow storage: source = dim/parent, target = fact/child
+      const sourceNode = nodes.find((n: any) => n.id === edge.source);
+      const targetNode = nodes.find((n: any) => n.id === edge.target);
+      if (!sourceNode || !targetNode) return;
+
+      // Dim → Fact: FK column goes in the fact table (target)
+      if (sourceNode.type === 'dimNode' && targetNode.type === 'factNode') {
+        const dimLabel = sourceNode.data.label || sourceNode.id;
+        const fkName = dimLabel.replace(/^dim_/, '') + '_key';
+        const hasFk = targetNode.data.cols.some((c: string) => {
+          const colName = c.match(/^([\w_]+)/)?.[1] || '';
+          return colName === fkName;
+        });
+        if (!hasFk) {
+          targetNode.data.cols.push(`${fkName} (FK)`);
+        }
+      }
+
+      // Dim → Dim (snowflake): FK column goes in the parent dim (target)
+      if (sourceNode.type === 'dimNode' && targetNode.type === 'dimNode') {
+        const childLabel = sourceNode.data.label || sourceNode.id;
+        const fkName = childLabel.replace(/^dim_/, '') + '_key';
+        const hasFk = targetNode.data.cols.some((c: string) => {
+          const colName = c.match(/^([\w_]+)/)?.[1] || '';
+          return colName === fkName;
+        });
+        if (!hasFk) {
+          targetNode.data.cols.push(`${fkName} (FK)`);
+        }
+      }
+    });
 
     stateData.schema = { nodes, edges };
     stateData.schemaChatHistory.push({ role: 'assistant', content: aiResponse });

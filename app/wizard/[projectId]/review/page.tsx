@@ -1,11 +1,12 @@
 'use client';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Database, Settings2, Trash2, Edit2, Loader2, Bot, Send, Image as ImageIcon } from 'lucide-react';
+import { ArrowRight, Plus, Database, Settings2, Trash2, Edit2, Loader2, Bot, Send, Image as ImageIcon, X, Table2, LayoutGrid } from 'lucide-react';
+import { MarkerType } from '@xyflow/react';
 import { renderAIResponse } from '@/lib/markdown';
 import { toPng } from 'html-to-image';
-import { ReactFlow, Background, Controls, Handle, Position, useNodesState, useEdgesState, addEdge, Node } from '@xyflow/react';
+import { ReactFlow, Background, Controls, Handle, Position, useNodesState, useEdgesState, addEdge, Node, type Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useWizard } from '@/components/WizardContext';
 
@@ -13,6 +14,12 @@ const DimNode = ({ id, data, selected }: any) => (
   <div style={{ width: '220px', background: 'var(--color-black)', border: selected ? '2px solid var(--color-white)' : '1px solid var(--color-border)', borderRadius: '6px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
     <Handle type="source" id="left" position={Position.Left} style={{ opacity: 0 }} />
     <Handle type="source" id="right" position={Position.Right} style={{ opacity: 0 }} />
+    <Handle type="source" id="top" position={Position.Top} style={{ opacity: 0 }} />
+    <Handle type="source" id="bottom" position={Position.Bottom} style={{ opacity: 0 }} />
+    <Handle type="target" id="target-left" position={Position.Left} style={{ opacity: 0 }} />
+    <Handle type="target" id="target-right" position={Position.Right} style={{ opacity: 0 }} />
+    <Handle type="target" id="target-top" position={Position.Top} style={{ opacity: 0 }} />
+    <Handle type="target" id="target-bottom" position={Position.Bottom} style={{ opacity: 0 }} />
     <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-black-light)', borderBottom: '1px solid var(--color-border)' }}>
       <span style={{ fontWeight: 600, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-white)' }}>
         {data.label} 
@@ -41,6 +48,8 @@ const FactNode = ({ id, data, selected }: any) => (
   <div style={{ width: '260px', background: 'var(--color-black)', border: selected ? '2px solid var(--color-green)' : '1px solid var(--color-border)', borderRadius: '6px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', overflow: 'hidden' }}>
     <Handle type="target" id="left" position={Position.Left} style={{ opacity: 0 }} />
     <Handle type="target" id="right" position={Position.Right} style={{ opacity: 0 }} />
+    <Handle type="target" id="top" position={Position.Top} style={{ opacity: 0 }} />
+    <Handle type="target" id="bottom" position={Position.Bottom} style={{ opacity: 0 }} />
     <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(134,188,37,0.1)', borderBottom: '1px solid rgba(134,188,37,0.2)' }}>
       <span style={{ fontWeight: 600, color: 'var(--color-green)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
         {data.label} 
@@ -82,12 +91,39 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState('visual');
+  // Debounce timer for auto-saving after node drag
+  const positionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nodesRef = useRef<any[]>([]);
+  const edgesRef = useRef<any[]>([]);
 
   // Chat State
   const [chatInput, setChatInput] = useState('');
   const [chatLog, setChatLog] = useState<{role: string, content: string}[]>([{role: 'assistant', content: 'You can edit visually, or ask me to modify the schema (e.g. "Rename dim_store to dim_location")'}]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatThinkingPhase, setChatThinkingPhase] = useState('Analysing request...');
   const [isStale, setIsStale] = useState(false);
+  
+  // Add Table Modal State
+  const [showAddTableModal, setShowAddTableModal] = useState(false);
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableType, setNewTableType] = useState<'dim' | 'fact'>('dim');
+  const [techConfig, setTechConfig] = useState<{ factPrefix: string; dimPrefix: string; keySuffix: string }>({ factPrefix: 'fct_', dimPrefix: 'dim_', keySuffix: '_key' });
+
+  // Keep refs in sync for debounced position save
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+
+  // Wrap onNodesChange to auto-save positions after drag ends (debounced 1.5s)
+  const handleNodesChange = useCallback((changes: any[]) => {
+    onNodesChange(changes);
+    const hasPositionChange = changes.some((c: any) => c.type === 'position' && c.dragging === false);
+    if (hasPositionChange) {
+      if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current);
+      positionSaveTimer.current = setTimeout(() => {
+        saveSchema(nodesRef.current, edgesRef.current);
+      }, 1500);
+    }
+  }, [onNodesChange]);
 
   // Sync methods for custom nodes
   const bindNodeMethods = useCallback((n: any[]) => {
@@ -106,56 +142,129 @@ export default function ReviewPage() {
     const factNodes = nodesToLayout.filter((n: any) => n.type === 'factNode');
     const dimNodes = nodesToLayout.filter((n: any) => n.type === 'dimNode');
 
-    // Facts are stacked vertically down the center
-    const FACT_X = 600;
-    const FACT_Y_START = 300;
-    const FACT_Y_GAP = 500;
-    const DIM_X_OFFSET = 420; // horizontal distance from fact to dims
-    const DIM_Y_GAP = 140;    // vertical spacing between stacked dims on each side
+    // ── Estimate node heights based on column count ─────────────────────────
+    const NODE_HEADER = 48;
+    const ROW_HEIGHT = 33;
+    const nodeHeight = (n: any) => NODE_HEADER + (n.data?.cols?.length || 4) * ROW_HEIGHT;
 
-    factNodes.forEach((fact: any, fi: number) => {
-      const factY = FACT_Y_START + fi * FACT_Y_GAP;
-      fact.position = { x: FACT_X, y: factY };
+    // ── Classify dimensions: shared (connected to 2+ facts) vs specific ────
+    const dimFactCount: Record<string, Set<string>> = {};
+    const dimToDimEdges: any[] = [];
+    dimNodes.forEach((d: any) => { dimFactCount[d.id] = new Set(); });
 
-      const connectedEdges = currentEdges.filter((e: any) => e.source === fact.id || e.target === fact.id);
-      const connectedDimIds = connectedEdges.map((e: any) => e.source === fact.id ? e.target : e.source);
-      const factDims = dimNodes.filter((d: any) => connectedDimIds.includes(d.id));
-
-      // Split dims evenly: first half left, second half right
-      const leftDims = factDims.filter((_: any, i: number) => i % 2 === 0);
-      const rightDims = factDims.filter((_: any, i: number) => i % 2 === 1);
-
-      const positionStack = (dims: any[], side: 'left' | 'right') => {
-        const totalHeight = (dims.length - 1) * DIM_Y_GAP;
-        const startY = factY - totalHeight / 2;
-        dims.forEach((dim: any, i: number) => {
-          if (!dim.hasBeenPositioned) {
-            dim.position = {
-              x: side === 'left' ? FACT_X - DIM_X_OFFSET : FACT_X + DIM_X_OFFSET,
-              y: startY + i * DIM_Y_GAP,
-            };
-            dim.hasBeenPositioned = true;
-          }
-        });
-      };
-
-      positionStack(leftDims, 'left');
-      positionStack(rightDims, 'right');
+    currentEdges.forEach((e: any) => {
+      const src = nodesToLayout.find((n: any) => n.id === e.source);
+      const tgt = nodesToLayout.find((n: any) => n.id === e.target);
+      if (!src || !tgt) return;
+      // Dim → Fact edge (in either direction due to how edges are built)
+      if (src.type === 'dimNode' && tgt.type === 'factNode') {
+        dimFactCount[src.id]?.add(tgt.id);
+      } else if (src.type === 'factNode' && tgt.type === 'dimNode') {
+        dimFactCount[tgt.id]?.add(src.id);
+      }
+      // Dim → Dim edge (e.g. geography → customers)
+      if (src.type === 'dimNode' && tgt.type === 'dimNode') {
+        dimToDimEdges.push(e);
+      }
     });
 
-    dimNodes.forEach((dim: any) => delete dim.hasBeenPositioned);
+    // A dimension is "conformed" (left column) only if it connects to ALL fact tables.
+    // For a single-fact schema every dim goes right (simple star, no left column needed).
+    const isConformed = (d: any) =>
+      factNodes.length > 1 && (dimFactCount[d.id]?.size || 0) === factNodes.length;
+    const sharedDims = dimNodes.filter((d: any) => isConformed(d));
+    const specificDims = dimNodes.filter((d: any) => !isConformed(d));
 
-    // Assign sourceHandle/targetHandle on edges so they connect via left/right sides
+    // ── Layout constants ────────────────────────────────────────────────────
+    const FACT_X = 700;           // center column for facts
+    const SHARED_X = 100;        // left column for shared dims
+    const SPECIFIC_X = 1300;     // right column for specific dims
+    const VERT_PAD = 40;         // vertical padding between nodes
+
+    // ── Stack facts vertically in center ────────────────────────────────────
+    let factY = 100;
+    factNodes.forEach((fact: any) => {
+      fact.position = { x: FACT_X, y: factY };
+      factY += nodeHeight(fact) + VERT_PAD + 120; // extra gap between facts for edge clearance
+    });
+    const totalFactHeight = factY - 100;
+
+    // ── Stack shared dims vertically on the left, centered on fact column ───
+    let sharedTotalHeight = sharedDims.reduce((h: number, d: any) => h + nodeHeight(d) + VERT_PAD, -VERT_PAD);
+    let sharedY = 100 + (totalFactHeight - sharedTotalHeight) / 2;
+    if (sharedY < 50) sharedY = 50;
+    sharedDims.forEach((dim: any) => {
+      dim.position = { x: SHARED_X, y: sharedY };
+      sharedY += nodeHeight(dim) + VERT_PAD;
+    });
+
+    // ── Place specific dims on the right ────────────────────────────────────
+    // Group them by which fact they connect to, then stack per-fact
+    const factSpecificDims: Record<string, any[]> = {};
+    factNodes.forEach((f: any) => { factSpecificDims[f.id] = []; });
+
+    specificDims.forEach((dim: any) => {
+      // Find which fact this dim connects to
+      let assignedFact: string | null = null;
+      for (const factId of Object.keys(factSpecificDims)) {
+        if (dimFactCount[dim.id]?.has(factId)) { assignedFact = factId; break; }
+      }
+      // Dims connected to no fact (e.g. geography only linked via other dims)
+      if (!assignedFact) {
+        // Check if this dim connects to another dim that connects to a fact
+        for (const dde of dimToDimEdges) {
+          const otherId = dde.source === dim.id ? dde.target : (dde.target === dim.id ? dde.source : null);
+          if (!otherId) continue;
+          for (const factId of Object.keys(factSpecificDims)) {
+            if (dimFactCount[otherId]?.has(factId)) { assignedFact = factId; break; }
+          }
+          if (assignedFact) break;
+        }
+      }
+      if (assignedFact) {
+        factSpecificDims[assignedFact].push(dim);
+      } else {
+        // Fallback: assign to first fact
+        const firstFact = factNodes[0];
+        if (firstFact) factSpecificDims[firstFact.id].push(dim);
+      }
+    });
+
+    // Position specific dims aligned with their fact
+    factNodes.forEach((fact: any) => {
+      const dims = factSpecificDims[fact.id] || [];
+      if (dims.length === 0) return;
+      const groupHeight = dims.reduce((h: number, d: any) => h + nodeHeight(d) + VERT_PAD, -VERT_PAD);
+      let startY = fact.position.y + nodeHeight(fact) / 2 - groupHeight / 2;
+      dims.forEach((dim: any) => {
+        dim.position = { x: SPECIFIC_X, y: startY };
+        startY += nodeHeight(dim) + VERT_PAD;
+      });
+    });
+
+    // ── Handle dims that connect to other dims (e.g. geography → customers/sellers) ──
+    // If geography has no direct fact edge but connects to dims on the right, place it far right
+    dimNodes.forEach((dim: any) => {
+      if (!dim.position) {
+        // Orphan dim — place below everything on the right
+        dim.position = { x: SPECIFIC_X + 400, y: factY };
+        factY += nodeHeight(dim) + VERT_PAD;
+      }
+    });
+
+    // ── Assign edge handles based on relative positions ─────────────────────
     currentEdges.forEach((edge: any) => {
       const src = nodesToLayout.find((n: any) => n.id === edge.source);
       const tgt = nodesToLayout.find((n: any) => n.id === edge.target);
       if (src?.position && tgt?.position) {
-        if (tgt.position.x < src.position.x) {
-          edge.sourceHandle = 'left';
-          edge.targetHandle = 'right';
+        const srcIsLeft = tgt.position.x < src.position.x;
+        // Source handle: always uses the source-type handles (left/right/top/bottom)
+        edge.sourceHandle = srcIsLeft ? 'left' : 'right';
+        // Target handle: factNodes use target handles (left/right), dimNodes use target-prefixed handles
+        if (tgt.type === 'dimNode') {
+          edge.targetHandle = srcIsLeft ? 'target-right' : 'target-left';
         } else {
-          edge.sourceHandle = 'right';
-          edge.targetHandle = 'left';
+          edge.targetHandle = srcIsLeft ? 'right' : 'left';
         }
       }
     });
@@ -170,24 +279,43 @@ export default function ReviewPage() {
         if (res.ok) {
           const data = await res.json();
           const parsed = JSON.parse(data.stateData || '{}');
+
+          // Load technical config for naming conventions
+          if (parsed.technicalConfig) {
+            setTechConfig({
+              factPrefix: parsed.technicalConfig.factPrefix ?? 'fct_',
+              dimPrefix: parsed.technicalConfig.dimPrefix ?? 'dim_',
+              keySuffix: parsed.technicalConfig.keySuffix ?? '_key',
+            });
+          }
           
           if (parsed.schema) {
             let loadedNodes = parsed.schema.nodes;
+            // Ensure all edges have arrow markers
+            const loadedEdges = (parsed.schema.edges || []).map((edge: any) => ({
+              ...edge,
+              markerEnd: { type: MarkerType.ArrowClosed, width: 20, height: 20 }
+            }));
             if (loadedNodes.every((n: any) => !n.position || (n.position.x === 0 && n.position.y === 0))) {
-                loadedNodes = layoutStarSchema(loadedNodes, parsed.schema.edges);
+                loadedNodes = layoutStarSchema(loadedNodes, loadedEdges);
             } else {
               // Nodes already positioned — still assign side handles on edges
-              parsed.schema.edges.forEach((edge: any) => {
+              loadedEdges.forEach((edge: any) => {
                 const src = loadedNodes.find((n: any) => n.id === edge.source);
                 const tgt = loadedNodes.find((n: any) => n.id === edge.target);
                 if (src?.position && tgt?.position) {
-                  edge.sourceHandle = tgt.position.x < src.position.x ? 'left' : 'right';
-                  edge.targetHandle = tgt.position.x < src.position.x ? 'right' : 'left';
+                  const srcIsLeft = tgt.position.x < src.position.x;
+                  edge.sourceHandle = srcIsLeft ? 'left' : 'right';
+                  if (tgt.type === 'dimNode') {
+                    edge.targetHandle = srcIsLeft ? 'target-right' : 'target-left';
+                  } else {
+                    edge.targetHandle = srcIsLeft ? 'right' : 'left';
+                  }
                 }
               });
             }
             setNodes(bindNodeMethods(loadedNodes));
-            setEdges(parsed.schema.edges);
+            setEdges(loadedEdges);
             // Check staleness: bus matrix updated after schema was generated
             const matrixAt = parsed.busMatrixGeneratedAt || 0;
             const schemaAt = parsed.schemaGeneratedAt || 0;
@@ -244,7 +372,8 @@ export default function ReviewPage() {
           style: { stroke: 'rgba(255,255,255,0.3)', strokeWidth: 2 },
           label: '1:M',
           labelBgStyle: { fill: '#1a1a1a', color: '#fff' },
-          labelStyle: { fill: '#fff', fontWeight: 700, fontSize: 12 }
+          labelStyle: { fill: '#fff', fontWeight: 700, fontSize: 12 },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 20, height: 20 }
         }, eds);
         saveSchema(nodes, newEdges);
         return newEdges;
@@ -323,17 +452,24 @@ export default function ReviewPage() {
   };
 
   const addCustomTable = () => {
-    const tableName = prompt('Enter table name (e.g. dim_custom or fact_custom):', 'dim_custom');
-    if (!tableName) return;
+    setNewTableName('');
+    setNewTableType('dim');
+    setShowAddTableModal(true);
+  };
+
+  const confirmAddTable = () => {
+    const rawName = newTableName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!rawName) return;
+    const prefix = newTableType === 'fact' ? techConfig.factPrefix : techConfig.dimPrefix;
+    const tableName = rawName.startsWith(prefix) ? rawName : `${prefix}${rawName.replace(/^(fct_|fact_|dim_|d_|f_|FACT_|DIM_)/, '')}`;
     
-    const isFact = tableName.startsWith('fact');
     const newNode = {
       id: tableName,
-      type: isFact ? 'factNode' : 'dimNode',
+      type: newTableType === 'fact' ? 'factNode' : 'dimNode',
       position: { x: Math.random() * 200 + 100, y: Math.random() * 200 + 100 },
       data: {
         label: tableName,
-        cols: [`${tableName.replace('dim_', '').replace('fact_', '')}_id (PK)`]
+        cols: [`${rawName.replace(/^(fct_|fact_|dim_|d_|f_|FACT_|DIM_)/, '')}${techConfig.keySuffix} (PK)`]
       }
     };
 
@@ -342,6 +478,7 @@ export default function ReviewPage() {
       saveSchema(updated, edges);
       return updated;
     });
+    setShowAddTableModal(false);
   };
 
   const addColumnToSelected = () => {
@@ -369,6 +506,14 @@ export default function ReviewPage() {
       setChatLog(newLog);
       setChatInput('');
       setChatLoading(true);
+      setChatThinkingPhase('Analysing request...');
+      
+      const phases = ['Reading current schema...', 'Applying modifications...', 'Validating referential integrity...', 'Rebuilding ERD layout...'];
+      let phaseIdx = 0;
+      const phaseTimer = setInterval(() => {
+        phaseIdx = (phaseIdx + 1) % phases.length;
+        setChatThinkingPhase(phases[phaseIdx]);
+      }, 2500);
       
       try {
           const res = await fetch(`/api/projects/${projectId}/schema/chat`, {
@@ -381,13 +526,17 @@ export default function ReviewPage() {
               setChatLog([...newLog, { role: 'assistant', content: data.response }]);
               if (data.schema) {
                   const laidOutNodes = layoutStarSchema(data.schema.nodes, data.schema.edges);
-                  setNodes(bindNodeMethods(laidOutNodes));
+                  const boundNodes = bindNodeMethods(laidOutNodes);
+                  setNodes(boundNodes);
                   setEdges(data.schema.edges);
+                  // Persist the re-laid-out schema so positions survive refresh
+                  saveSchema(boundNodes, data.schema.edges);
               }
           }
       } catch (e) {
           console.error(e);
       } finally {
+          clearInterval(phaseTimer);
           setChatLoading(false);
       }
   };
@@ -440,7 +589,7 @@ export default function ReviewPage() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       
       {/* Workspace Header */}
-      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#050505', flexShrink: 0 }}>
+      <div style={{ padding: '16px 32px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-page)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <h1 className="heading-font" style={{ fontSize: '1.25rem' }}>Schema Editor Workspace</h1>
           <div style={{ display: 'flex', background: 'var(--color-black-light)', borderRadius: '4px', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
@@ -503,9 +652,9 @@ export default function ReviewPage() {
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         
         {/* Canvas Area / YAML View */}
-        <div style={{ flex: 1, position: 'relative', background: '#080808', borderRight: '1px solid var(--color-border)' }}>
+        <div style={{ flex: 1, position: 'relative', background: 'var(--bg-surface)', borderRight: '1px solid var(--color-border)' }}>
             {nodes.length === 0 ? (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px', zIndex: 10, background: '#0a0a0a' }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '24px', zIndex: 10, background: 'var(--bg-surface)' }}>
                     <div style={{ textAlign: 'center' }}>
                         <h2 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--color-white)' }}>No schema generated yet.</h2>
                         <p style={{ color: 'var(--color-white-muted)', fontSize: '0.875rem', maxWidth: '400px' }}>You can sketch a model manually, or complete Profiling & Requirements to auto-generate one.</p>
@@ -521,6 +670,7 @@ export default function ReviewPage() {
                                     const laidOutNodes = layoutStarSchema(genData.nodes, genData.edges);
                                     setNodes(bindNodeMethods(laidOutNodes));
                                     setEdges(genData.edges);
+                                    setIsStale(false);
                                 }
                             } catch(e) { console.error(e) }
                             setLoading(false);
@@ -532,7 +682,7 @@ export default function ReviewPage() {
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
-                    onNodesChange={onNodesChange}
+                    onNodesChange={handleNodesChange}
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
                     onNodeClick={onNodeClick}
@@ -618,8 +768,20 @@ ${n.data.cols.map((c: string) => `      - name: ${c.split(' ')[0]}
                      <div style={{ width: '24px', height: '24px', borderRadius: '4px', background: 'var(--color-green)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                          <Bot size={14} />
                      </div>
-                     <div style={{ fontSize: '0.875rem', color: 'var(--color-white-muted)', paddingTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                         <Loader2 size={12} className="spin-icon" /> Updating Schema...
+                     <div style={{ fontSize: '0.875rem', color: 'var(--color-white-muted)', paddingTop: '2px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                             <Loader2 size={12} className="spin-icon" />
+                             <span style={{ transition: 'opacity 0.3s', fontWeight: 500 }}>{chatThinkingPhase}</span>
+                         </div>
+                         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                           {[0,1,2].map(i => (
+                             <div key={i} style={{
+                               width: '5px', height: '5px', borderRadius: '50%', background: 'var(--color-green)',
+                               animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`
+                             }} />
+                           ))}
+                         </div>
+                         <style>{`@keyframes pulse { 0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.2); } }`}</style>
                      </div>
                  </div>
              )}
@@ -647,6 +809,58 @@ ${n.data.cols.map((c: string) => `      - name: ${c.split(' ')[0]}
 
       </div>
       </div>
+
+      {/* Add Table Modal */}
+      {showAddTableModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowAddTableModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-surface)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '32px', width: '400px', maxWidth: '90vw' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h3 className="heading-font" style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-white)' }}>Add New Table</h3>
+              <button onClick={() => setShowAddTableModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--color-white-muted)', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-white-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Table Type</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setNewTableType('dim')} style={{ flex: 1, padding: '10px 16px', borderRadius: '8px', border: `1px solid ${newTableType === 'dim' ? 'var(--color-white)' : 'var(--color-border)'}`, background: newTableType === 'dim' ? 'rgba(255,255,255,0.08)' : 'transparent', color: 'var(--color-white)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem' }}>
+                  <Table2 size={16} /> Dimension
+                </button>
+                <button onClick={() => setNewTableType('fact')} style={{ flex: 1, padding: '10px 16px', borderRadius: '8px', border: `1px solid ${newTableType === 'fact' ? 'var(--color-green)' : 'var(--color-border)'}`, background: newTableType === 'fact' ? 'rgba(134,188,37,0.1)' : 'transparent', color: newTableType === 'fact' ? 'var(--color-green)' : 'var(--color-white)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem' }}>
+                  <LayoutGrid size={16} /> Fact
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-white-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Table Name</label>
+              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-input)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0 12px' }}>
+                <span style={{ color: 'var(--color-white-muted)', fontSize: '0.875rem', fontFamily: 'monospace', marginRight: '2px' }}>{newTableType === 'fact' ? 'fct_' : 'dim_'}</span>
+                <input
+                  type="text"
+                  value={newTableName}
+                  onChange={e => setNewTableName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                  onKeyDown={e => e.key === 'Enter' && newTableName.trim() && confirmAddTable()}
+                  placeholder={newTableType === 'fact' ? 'order_items' : 'customer'}
+                  autoFocus
+                  style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--color-white)', fontSize: '0.875rem', fontFamily: 'monospace', padding: '10px 0', outline: 'none' }}
+                />
+              </div>
+              {newTableName.trim() && (
+                <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--color-white-muted)', fontFamily: 'monospace' }}>
+                  → {newTableType === 'fact' ? 'fct_' : 'dim_'}{newTableName.trim().toLowerCase().replace(/\s+/g, '_').replace(/^(fct_|fact_|dim_)/, '')}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowAddTableModal(false)} className="btn-secondary" style={{ padding: '8px 20px', borderRadius: '8px', fontSize: '0.8125rem' }}>Cancel</button>
+              <button onClick={confirmAddTable} disabled={!newTableName.trim()} className="btn-primary" style={{ padding: '8px 20px', borderRadius: '8px', fontSize: '0.8125rem', opacity: newTableName.trim() ? 1 : 0.5, border: 'none', cursor: newTableName.trim() ? 'pointer' : 'not-allowed' }}>
+                <Plus size={14} /> Create Table
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
