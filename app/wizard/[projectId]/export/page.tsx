@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowRight, Code, Download, FileJson, FileText, CheckCircle2, Copy, Terminal, ChevronRight, Folder, Loader2 } from 'lucide-react';
 import { renderAIResponse } from '@/lib/markdown';
+import { useWizard } from '@/components/WizardContext';
 
 export default function ExportPage() {
   const { projectId } = useParams() as { projectId: string };
   const router = useRouter();
+  const { markStepComplete } = useWizard();
   const [generating, setGenerating] = useState(true);
   const [navigating, setNavigating] = useState(false);
   const [files, setFiles] = useState<{name: string, type: string, content: string}[]>([]);
@@ -22,6 +24,19 @@ export default function ExportPage() {
           setFiles(data.files);
           if (data.files && data.files.length > 0) {
               setActiveFile(data.files.find((f: any) => f.name.includes('fact')) || data.files[0]);
+              // Mark step complete and persist
+              markStepComplete('export');
+              try {
+                const stRes = await fetch(`/api/projects/${projectId}/state`);
+                const stData = await stRes.json();
+                const completed: string[] = JSON.parse(stData.completedSteps || '[]');
+                if (!completed.includes('export')) completed.push('export');
+                await fetch(`/api/projects/${projectId}/state`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ currentStep: 'export', completedSteps: completed }),
+                });
+              } catch { /* non-critical */ }
           }
         }
       } catch (e) {

@@ -65,13 +65,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 IMPORTANT: Use these EXACT prefixes and suffixes in all generated table and column names. Override any defaults in the system prompt with these user-configured values.
 `;
 
-    const factTableLines = processList
-      .map((p: string) => `  "${p}"  →  fct_${toSnakeCase(p)}`)
-      .join('\n');
-    const dimTableLines = dimensionList
-      .map((d: string) => `  "${d}"  →  dim_${toSnakeCase(d)}`)
-      .join('\n');
-    
     const systemPrompt = `${PROMPTS.SCHEMA_GENERATOR}
 ${configInstructions}
 === BUS MATRIX — MANDATORY FACT TABLE NAMES (${processList.length} total) ===

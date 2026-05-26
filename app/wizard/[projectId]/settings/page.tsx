@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowRight, Settings, Save, RefreshCw, CheckCircle2, Info } from 'lucide-react';
+import { useWizard } from '@/components/WizardContext';
 
 interface TechnicalConfig {
   factPrefix: string;
@@ -47,6 +48,7 @@ const PRESETS: { label: string; description: string; config: TechnicalConfig }[]
 export default function SettingsPage() {
   const { projectId } = useParams() as { projectId: string };
 
+  const { markStepComplete } = useWizard();
   const [config, setConfig] = useState<TechnicalConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,15 +89,19 @@ export default function SettingsPage() {
       const stateData = data.stateData ? JSON.parse(data.stateData) : {};
       stateData.technicalConfig = config;
 
+      const completedSteps: string[] = JSON.parse(data.completedSteps || '[]');
+      if (!completedSteps.includes('settings')) completedSteps.push('settings');
+
       await fetch(`/api/projects/${projectId}/state`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          currentStep: data.currentStep || 'settings',
-          completedSteps: JSON.parse(data.completedSteps || '[]'),
+          currentStep: 'settings',
+          completedSteps,
           stateData: JSON.stringify(stateData),
         }),
       });
+      markStepComplete('settings');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {

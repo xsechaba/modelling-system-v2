@@ -113,29 +113,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Foreign key constraints from edges
   for (const edge of (schemaData.edges || [])) {
-    const sourceTable = edge.source; // fact table
-    const targetTable = edge.target; // dimension table
+    // In the stored schema, edge.source = dimension table (PK side),
+    // edge.target = fact table (FK side). Foreign key lives on the fact table.
+    const dimTable = edge.source;
+    const factTable = edge.target;
 
-    // Find the FK column in the source table
-    const sourceNode = schemaData.nodes.find((n: any) => (n.data.label || n.id) === sourceTable);
-    const targetNode = schemaData.nodes.find((n: any) => (n.data.label || n.id) === targetTable);
-    if (!sourceNode || !targetNode) continue;
+    const dimNode = schemaData.nodes.find((n: any) => (n.data.label || n.id) === dimTable);
+    const factNode = schemaData.nodes.find((n: any) => (n.data.label || n.id) === factTable);
+    if (!dimNode || !factNode) continue;
 
-    // Find FK column: look for column marked (FK) that references target
-    const targetPKCol = (targetNode.data.cols || []).find((c: string) => c.includes('(PK)'));
-    const targetPK = targetPKCol ? targetPKCol.split(' ')[0] : null;
+    // PK is on the dimension table
+    const dimPKCol = (dimNode.data.cols || []).find((c: string) => c.includes('(PK)'));
+    const dimPK = dimPKCol ? dimPKCol.split(' ')[0] : null;
 
-    // Find FK col in source that matches target dimension
+    // FK is on the fact table — find a (FK) column matching the dim PK name
     let fkCol: string | null = null;
-    for (const colStr of (sourceNode.data.cols || [])) {
+    for (const colStr of (factNode.data.cols || [])) {
       if (colStr.includes('(FK)')) {
         const cn = colStr.split(' ')[0];
-        // Match if col name contains the target table's key pattern
-        if (targetPK && cn === targetPK) {
+        if (dimPK && cn === dimPK) {
           fkCol = cn;
           break;
         }
-        // Or if the edge specifies sourceColumn
         if (edge.sourceColumn && cn === edge.sourceColumn) {
           fkCol = cn;
           break;
@@ -143,14 +142,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
-    // Fallback: use edge metadata
-    if (!fkCol && edge.sourceColumn) fkCol = edge.sourceColumn;
-    if (!fkCol && targetPK) fkCol = targetPK; // often FK col has same name as PK
+    // Fallback: use edge metadata only — do NOT assume the FK col name matches the dim PK
+    if (!fkCol && edge.targetColumn) fkCol = edge.targetColumn;
 
-    if (fkCol && targetPK) {
-      const constraintName = `fk_${sourceTable}_${fkCol}`.substring(0, 63);
+    if (fkCol && dimPK) {
+      const constraintName = `fk_${factTable}_${fkCol}`.substring(0, 63);
       ddlStatements.push(
-        `ALTER TABLE "${targetSchema}"."${sourceTable}" ADD CONSTRAINT "${constraintName}" FOREIGN KEY ("${fkCol}") REFERENCES "${targetSchema}"."${targetTable}" ("${targetPK}") ON DELETE SET NULL;`
+        `ALTER TABLE "${targetSchema}"."${factTable}" ADD CONSTRAINT "${constraintName}" FOREIGN KEY ("${fkCol}") REFERENCES "${targetSchema}"."${dimTable}" ("${dimPK}") ON DELETE SET NULL;`
       );
     }
   }
@@ -219,7 +217,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, logs, ddl: ddlStatements });
   } catch (connErr: any) {
-    logs.push(`Connection failed: ${connErr.message}`);
+    const errMsg = connErr?.message || connErr?.code || JSON.stringify(connErr) || 'Unknown error';
+    logs.push(`Connection failed: ${errMsg}`);
+    if (connErr?.code) logs.push(`Error code: ${connErr.code}`);
     return NextResponse.json({ success: false, logs, ddl: ddlStatements }, { status: 500 });
   } finally {
     try { await client.end(); } catch { /* ignore */ }

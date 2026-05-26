@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Database, Terminal, CheckCircle2, AlertCircle, Play, Eye, EyeOff, Copy, RefreshCw, Server } from 'lucide-react';
+import { useWizard } from '@/components/WizardContext';
 
 interface DeployState {
   ddl: string[];
@@ -15,6 +16,8 @@ interface DeployState {
 
 export default function DeployPage() {
   const { projectId } = useParams() as { projectId: string };
+
+  const { markStepComplete } = useWizard();
 
   // Connection form
   const [host, setHost] = useState('localhost');
@@ -124,6 +127,7 @@ export default function DeployPage() {
 
       if (data.success && preview) {
         setPreview({ ...preview, deployedAt: Date.now() });
+        markStepComplete('deploy');
       }
     } catch (err: any) {
       setDeployResult({ success: false, logs: [`Deployment failed: ${err.message}`] });

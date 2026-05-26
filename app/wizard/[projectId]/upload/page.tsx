@@ -177,7 +177,7 @@ export default function UploadPage() {
       });
 
       setAlreadyProfiled(true);
-      setTimeout(() => router.push(`/wizard/${projectId}/profile`), 400);
+      setTimeout(() => router.push(`/wizard/${projectId}/settings`), 400);
     } catch (err: any) {
       setDbError(err.message);
       setProfiling(false);
@@ -191,7 +191,7 @@ export default function UploadPage() {
     
     // If already profiled and no new files, just navigate
     if (alreadyProfiled && newFiles.length === 0) {
-      router.push(`/wizard/${projectId}/profile`);
+      router.push(`/wizard/${projectId}/settings`);
       return;
     }
 
@@ -231,10 +231,10 @@ export default function UploadPage() {
       setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'done' as const })));
       setAlreadyProfiled(true);
 
-      // Navigate to profiling page
+      // Navigate to settings page
       markStepComplete('upload');
       router.refresh();
-      setTimeout(() => router.push(`/wizard/${projectId}/profile`), 400);
+      setTimeout(() => router.push(`/wizard/${projectId}/settings`), 400);
     } catch (err: any) {
       alert('Failed to profile: ' + err.message);
       setProfiling(false);

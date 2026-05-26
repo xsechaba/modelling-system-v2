@@ -391,10 +391,12 @@ Every fact table MUST include ALL columns that together uniquely identify one so
 - Determine the actual grain columns from the profiling data and requirements, not from assumptions.
 
 CRITICAL — DATE ROLE-PLAYING ON FACT TABLES:
-If a Date dimension exists in the MANDATORY DIMENSION TABLE NAMES list AND a fact table's source data has MULTIPLE meaningful date events, create SEPARATE date foreign key columns for each, each pointing to the date dimension.
-- Name each FK clearly: <event>_date_key (e.g. purchase_date_key, ship_date_key, review_date_key)
-- For simpler facts with one primary date, a single date_key is sufficient.
-- Never use a generic "date_key" on an event-rich fact table where multiple dates matter — name EACH one.
+If a Date dimension exists in the MANDATORY DIMENSION TABLE NAMES list, every fact table MUST reference it using INTEGER surrogate key columns — NOT raw DATE/TIMESTAMP columns.
+- WRONG: order_date DATE, ship_date DATE, delivery_date DATE  ← these are raw date values, NOT foreign keys to dim_date
+- RIGHT: purchase_date_key INT (FK → dim_date), ship_date_key INT (FK → dim_date), delivery_date_key INT (FK → dim_date)
+- Each meaningful date event in the fact table source data must become its own named FK integer column (e.g. purchase_date_key, ship_date_key, review_date_key, delivery_date_key).
+- Mark each as isForeignKey: true in the JSON output.
+- For simpler facts with only one primary date, a single date_key INT (FK) column is sufficient.
 - If Date is NOT in the mandatory dimension list, do NOT create date FK columns or a date dimension.
 
 CRITICAL — ROLE-PLAYING DIMENSIONS:

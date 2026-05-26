@@ -46,6 +46,7 @@ export default async function ProjectDashboard({ params }: { params: Promise<{ i
 
   const steps = [
     { id: 'upload', label: 'Ingest Data' },
+    { id: 'settings', label: 'Configuration' },
     { id: 'profile', label: 'Profiling' },
     { id: 'requirements', label: 'Define Requirements' },
     { id: 'bus-matrix', label: 'Bus Matrix' },

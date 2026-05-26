@@ -215,9 +215,19 @@ export default function RequirementsPage() {
             return [...prev, ...fresh];
           });
         }
+      } else {
+        const errText = await res.text().catch(() => 'Unknown error');
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `**Something went wrong** processing your request.\n\nError: ${errText || res.statusText}\n\nThis can happen with very large documents. Try splitting your transcript into smaller sections and uploading them one at a time.`
+        }]);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `**Connection error** — the request could not be completed.\n\nThis usually means the AI took too long to respond (large document). Try uploading a shorter section of the transcript.`
+      }]);
     } finally {
       clearInterval(phaseTimer);
       setThinkingPhase('');

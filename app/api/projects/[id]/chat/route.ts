@@ -4,9 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { chatWithClaude, askClaude } from '@/lib/bedrock';
 import { PROMPTS } from '@/lib/prompts';
-import { mergeRequirements } from '@/lib/requirements';
-
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+import { mergeRequirements } from '@/lib/requirements';\n\n// Allow up to 120s for large document processing (3 parallel Bedrock calls)\nexport const maxDuration = 120;\n\nexport async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const session = await getServerSession(authOptions);
@@ -93,14 +91,22 @@ ${aiInterpretation}
 
     const [rawAiResponse, extractionRaw, modificationRaw] = await Promise.all([
       chatWithClaude(systemPromptWithContext, formattedHistory),
-      // Always extract — requirements should sync on every turn, not just document uploads
-      // Include profiling context so the extractor can identify dimensions/processes from column data
+      // Extraction: for document uploads send ONLY the document text (avoids sending the full
+      // 20k-char transcript back through history, which blows up the context window).
+      // For regular chat turns, send the last few history messages for context.
       chatWithClaude(
         `${PROMPTS.REQUIREMENTS_EXTRACTOR}\n\n=== SOURCE DATA PROFILING CONTEXT ===\n${profilingContext}\n\n=== AI PROFILING INTERPRETATION ===\n${aiInterpretation}`,
-        [
-          ...textOnlyHistory,
-          { role: 'user', content: 'Extract all requirements from the above conversation now. Output ONLY the JSON array.' }
-        ]
+        isDocument
+          ? [
+              // Document upload: send just the document content for extraction
+              { role: 'user', content: message.length > 30000 ? message.substring(0, 30000) + '\n...[truncated]' : message },
+              { role: 'user', content: 'Extract all requirements from the above document now. Output ONLY the JSON array.' }
+            ]
+          : [
+              // Regular chat: send recent history (last 6 turns max) to keep tokens low
+              ...textOnlyHistory.slice(-6),
+              { role: 'user', content: 'Extract all requirements from the above conversation now. Output ONLY the JSON array.' }
+            ]
       ).catch((e: any) => {
           console.error('[chat/extract] Extraction call failed:', e?.message);
           return null;
