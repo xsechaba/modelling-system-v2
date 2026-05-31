@@ -118,6 +118,10 @@ export default function BusMatrixPage() {
 
   const handleProceed = async () => {
     try {
+      // Flush the current bus matrix to the DB before navigating so schema
+      // generation always sees the latest state (including manually added dims/processes).
+      await saveToState(dimensions, matrix);
+
       const res = await fetch(`/api/projects/${projectId}/state`);
       const data = await res.json();
       const completedSteps = JSON.parse(data.completedSteps || '[]');
@@ -204,7 +208,7 @@ export default function BusMatrixPage() {
                             }
                         } catch(e) { console.error(e) }
                         setLoading(false);
-                    }} style={{ background: 'var(--color-green)', border: 'none', color: '#000', padding: '6px 12px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 600 }}>Generate via AI</button>
+                    }} style={{ background: 'var(--color-green)', border: 'none', color: 'var(--btn-generate-text)', padding: '6px 12px', borderRadius: '4px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontWeight: 600 }}>Generate via AI</button>
                 </div>
             </div>
 
@@ -234,7 +238,7 @@ export default function BusMatrixPage() {
                                     }
                                 } catch(e) { console.error(e) }
                                 setLoading(false);
-                            }} className="btn-primary" style={{ padding: '14px 28px', borderRadius: '6px', fontSize: '1rem', background: 'var(--color-green)', color: '#000', border: 'none', fontWeight: 600 }}>Generate via AI</button>
+                            }} className="btn-primary" style={{ padding: '14px 28px', borderRadius: '6px', fontSize: '1rem', background: 'var(--color-green)', color: 'var(--btn-generate-text)', border: 'none', fontWeight: 600 }}>Generate via AI</button>
                     </div>
                 </div>
             ) : (

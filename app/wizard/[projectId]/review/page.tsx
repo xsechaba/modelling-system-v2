@@ -674,7 +674,7 @@ export default function ReviewPage() {
                                 }
                             } catch(e) { console.error(e) }
                             setLoading(false);
-                        }} className="btn-primary" style={{ padding: '10px 20px', borderRadius: '6px', background: 'var(--color-green)', color: '#000', border: 'none', fontWeight: 600 }}>Generate via AI</button>
+                        }} className="btn-primary" style={{ padding: '10px 20px', borderRadius: '6px', background: 'var(--color-green)', color: 'var(--btn-generate-text)', border: 'none', fontWeight: 600 }}>Generate via AI</button>
                     </div>
                 </div>
             ) : null}

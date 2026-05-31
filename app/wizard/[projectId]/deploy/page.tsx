@@ -12,6 +12,7 @@ interface DeployState {
   dimCount: number;
   deployedAt: number | null;
   deployTarget: { host: string; port: number; database: string; schema: string } | null;
+  deployLogs: { success: boolean; logs: string[] } | null;
 }
 
 export default function DeployPage() {
@@ -53,6 +54,10 @@ export default function DeployPage() {
             setPort(String(data.deployTarget.port || 5432));
             setDatabase(data.deployTarget.database || 'dimwiz');
             setPgSchema(data.deployTarget.schema || 'public');
+          }
+          // Restore previous deployment logs so they are visible on return
+          if (data.deployLogs) {
+            setDeployResult({ success: data.deployLogs.success, logs: data.deployLogs.logs });
           }
         } else {
           setError('No schema found. Generate a schema first before deploying.');

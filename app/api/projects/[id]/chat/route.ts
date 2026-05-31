@@ -4,7 +4,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { chatWithClaude, askClaude } from '@/lib/bedrock';
 import { PROMPTS } from '@/lib/prompts';
-import { mergeRequirements } from '@/lib/requirements';\n\n// Allow up to 120s for large document processing (3 parallel Bedrock calls)\nexport const maxDuration = 120;\n\nexport async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+import { mergeRequirements } from '@/lib/requirements';
+
+// Allow up to 120s for large document processing (3 parallel Bedrock calls)
+export const maxDuration = 120;
+
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const session = await getServerSession(authOptions);

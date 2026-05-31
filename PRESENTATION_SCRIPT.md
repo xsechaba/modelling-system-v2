@@ -13,7 +13,9 @@
 ### [SLIDE 1 — Title Slide]
 **What to say:**
 
-"Good [morning / afternoon] everyone. Today I'm going to walk you through a project I've been working on — an AI-powered data modelling agent. By the end of this, you'll understand the problem it solves, how it works, and you'll actually get to see it in action."
+"Good [morning / afternoon] everyone. My name is Sechaba Mohlabeng, and I'm part of the Agentic AI Fast Track programme here at Deloitte. Over the past three months, the programme has given us a deep dive into agentic AI engineering — how to design, build, and deploy AI systems that don't just answer questions, but actually take actions and drive workflows end to end.
+
+This is the project I was assigned to work on as part of that programme. Today I'm going to walk you through what I built — an AI-powered data modelling system. By the end of this, you'll understand the problem it solves, how it works, and you'll actually get to see it in action."
 
 ---
 
@@ -24,6 +26,8 @@
 
 The problem is: this process is slow, expensive, and requires very specific expertise. A skilled data modeller typically takes days or even weeks just to get from a business conversation to a usable schema. You need someone who understands the business, understands the data, AND understands the technical standards. That's a rare combination — and a costly one.
 
+And once a model has been built, it's very difficult to change. Business requirements evolve — new dimensions get added, new processes come in scope — but the model doesn't easily flex with them. It's not agile. You often end up going back to the drawing board, which is expensive.
+
 And in a consulting context like ours, we do this repeatedly for client after client."
 
 ---
@@ -33,7 +37,7 @@ And in a consulting context like ours, we do this repeatedly for client after cl
 
 "So the question we asked was: what if you could compress that entire process — from raw data and business conversations, all the way to a deployable database schema — into a single guided session, powered by AI?
 
-That's exactly what this tool does. It's an end-to-end intelligent wizard that takes you from 'here is my data and here are my business requirements' to 'here are your tables, here is your SQL code, and here is your deployed database' — all in one place, without needing deep technical knowledge to drive it."
+That's exactly what this tool does. You bring your raw data and your business questions — the tool walks you through every stage of the process, step by step, and at the end you have a complete, production-ready data model. Real tables. Real code. Deployed to a real database. And you don't need to be a data engineer to drive it."
 
 ---
 
@@ -52,66 +56,48 @@ A star schema has two types of tables: Fact tables — which store the numbers, 
 
 ---
 
-### [SLIDE 5 — How the Tool Works — Overview]
+### [SLIDE 5 — The 8 Steps]
+*One sentence per step — the detail comes in the demo.*
+
 **What to say:**
 
-"The tool is structured as an 8-step pipeline. Each step builds on the previous one. Let me walk you through them at a high level.
+"The tool has 8 guided steps, but they were designed to be modular and independent — so you can start wherever you are, whether you already have business context, raw data, or both. But at a high level:
 
-Think of it like building a house. You wouldn't start laying bricks before you've spoken to the client about what they want, reviewed the land, and drawn up the blueprints. This tool enforces that same discipline — but compresses it dramatically using AI."
+Step 1 — **Ingest.** Upload your raw data files or connect directly to a source database.
+
+Step 2 — **Configure.** Set your naming conventions and technical standards for the model.
+
+Step 3 — **Profile.** The AI scans your data and summarises what it contains.
+
+Step 4 — **Requirements.** You have a guided conversation with an AI Business Analyst to capture what you want to measure.
+
+Step 5 — **Bus Matrix.** The AI maps your requirements into a grid of business processes and dimensions.
+
+Step 6 — **Schema Editor.** Review and edit the AI-generated table structure and relationships.
+
+Step 7 — **Code Generation.** Download production-ready SQL and dbt code from your approved schema.
+
+Step 8 — **Deploy.** Connect to your database and deploy the tables live."
 
 ---
 
-### [SLIDE 6 — The 8 Steps]
-*Walk through each step briefly. One or two sentences each. The full explanation comes in the demo.*
-
+### [SLIDE 6 — Key Design Considerations]
 **What to say:**
 
-"Step 1 — **Ingest your data.** You upload your raw files — CSVs, Excel spreadsheets, or connect directly to a database. This is just giving the system something to work with.
+"Three quick design considerations shaped this tool: AI accuracy, context continuity, and human-in-the-loop control.
 
-Step 2 — **Set your technical configuration.** You choose your naming conventions — how tables should be named, what prefixes to use. This sounds small, but in enterprise settings these standards matter enormously.
+**First: AI Accuracy.** AI is powerful, but it doesn't know your business. So the system always proposes — and you always decide. You can review and override at every step, approve the business logic and mappings, and you always have the final say.
 
-Step 3 — **Data Profiling.** The AI automatically scans your data and tells you what it found — column names, data types, patterns, anomalies. You don't do anything here — it's the system doing its homework.
+**Second: Context Continuity.** Great models come from connecting the right dots. The system preserves context end-to-end — your business conversations, data profiling insights, technical standards, and business rules all flow through every stage, nothing gets lost between steps.
 
-Step 4 — **Business Requirements.** You have a conversation with an AI Business Analyst. You upload meeting notes or transcripts, or you just chat. The AI extracts your business questions and turns them into structured requirements. What do you want to measure? How do you want to cut it?
-
-Step 5 — **Bus Matrix.** This is a standard data warehousing technique. The AI maps your requirements into a grid — your business processes on one side, your dimensions on the other. It's like a coverage map that shows exactly what your data model needs to support.
-
-Step 6 — **Schema Editor.** The AI generates the actual physical tables and relationships — the blueprint. You see it as a visual diagram and can edit it before committing.
-
-Step 7 — **Code Generation.** The finalised schema is turned into production-ready SQL and dbt code. Ready to download and deploy.
-
-Step 8 — **Deploy.** You connect the tool to your PostgreSQL database and hit deploy. The tables are created live. Done."
+**Third: Human-in-the-Loop.** This is a collaboration, not a black box. You guide it, AI accelerates it, and you own the outcome — guided by AI, validated by you, deployed with confidence."
 
 ---
 
-### [SLIDE 7 — Key Design Considerations]
+### [SLIDE 7 — Transition to Demo]
 **What to say:**
 
-"A few things we had to think carefully about when building this.
-
-**First: AI accuracy.** The AI is powerful, but it doesn't know your business. So the system is designed to always give the human the final say. At every step — the bus matrix, the schema, the column names — you can review and override. The AI proposes, you approve.
-
-**Second: Context continuity.** A data model isn't designed in one shot. There are requirements from meetings, data from systems, naming conventions from IT, and business logic from stakeholders. The system stores all of that context and passes it through every step, so nothing gets lost.
-
-**Third: Real output.** This isn't a report or a recommendation — it produces actual deployable artefacts. SQL DDL scripts, dbt models, and live database deployment. The output is immediately usable by an engineering team.
-
-**Fourth: Non-technical usability.** A business analyst or a consultant who isn't a data engineer should be able to use this. The terminology is explained, the steps are guided, and the AI does the heavy lifting."
-
----
-
-### [SLIDE 8 — Technology Stack (brief, don't dwell)]
-**What to say:**
-
-"Under the hood: the application is built on Next.js, a modern web framework. The AI is powered by Amazon Bedrock, specifically Claude 3 Sonnet from Anthropic — one of the leading large language models available today. Data is persisted in a SQLite database during development, and the tool connects to PostgreSQL for the deployment step. The whole thing can be hosted on an EC2 instance in AWS.
-
-I won't go too deep into the tech — what matters is that it's all cloud-native, it's scalable, and it runs in your browser."
-
----
-
-### [SLIDE 9 — Transition to Demo]
-**What to say:**
-
-"Alright — enough slides. Let me actually show you how this works. I'm going to walk through the entire pipeline from start to finish, so you can see what each step looks and feels like in practice."
+"Alright — enough slides. Let me actually show you how this works. I'm going to walk through the entire system from start to finish, so you can see what each step looks and feels like in practice."
 
 *[Switch to the browser / app]*
 
@@ -126,100 +112,106 @@ I won't go too deep into the tech — what matters is that it's all cloud-native
 
 ---
 
-### DEMO STEP 1 — Show the Dashboard / Project List
+### DEMO STEP 1 — Homepage and Login
 **What to say:**
 
-"So when you log into the tool, you land here — your project dashboard. You can have multiple projects on the go. Each one tracks its own progress. You can see here the pipeline steps as a progress bar — how far along each project is.
-
-I've already created a project with some sample data. Let me open it."
+"So this is the homepage — what greets you when you first arrive. It's a clean entry point. From here you hit Login, authenticate, and you're in."
 
 ---
 
-### DEMO STEP 2 — Data Ingestion Page
+### DEMO STEP 2 — Workspaces and Project Dashboard
 **What to say:**
 
-"This is the ingestion page. You can upload a CSV, Excel file, or connect directly to a source database. For this demo I've already uploaded a retail sales dataset — you can see it listed here.
+"Once logged in, you land on the Workspaces page. This is where all your projects live — past and present. You can pick up any existing session right from here.
 
-Once uploaded, the tool kicks off profiling automatically."
+Let me open this project so you can see the dashboard. The dashboard gives you a full picture of where you are in the process — every completed step is tracked, you can see the data quality score, how many files have been ingested, and a full activity log. If you're working in a team, your collaborators are listed here too. It's designed so that anyone coming into the project mid-way knows exactly where things stand."
 
 ---
 
-### DEMO STEP 3 — Data Profiling Page
+### DEMO STEP 3 — Starting a New Project
 **What to say:**
 
-"This is the profiling page. The AI has scanned the data and is giving us a structured summary. You can see things like: how many rows, what columns exist, data types, and the number of unique values per column.
+"If we were starting fresh, this is what that looks like. You give the project a name, set the access controls — so you can control who can view or contribute — and configure whether you hace data to start off the session with or maybe you have context of the business needs.
 
-On the right here is the AI's interpretation — it's not just showing you stats, it's explaining what the data likely represents. It's already spotted that there are date columns, customer IDs, product codes, and transaction amounts. That context flows forward into everything that comes next."
+You can also connect a Git repository at this point, so that the code generated at the end gets pushed directly to your repo without any manual copying."
+
+*[You don't need to demo the full new project flow — just show it briefly and move on.]*
 
 ---
 
-### DEMO STEP 4 — Technical Configuration Page
+### DEMO STEP 4 — Data Ingestion
 **What to say:**
 
-"Before we go further, we can set our naming conventions. This page has presets — Kimball Standard is the most commonly used approach in enterprise data warehousing. You can also customise: fact table prefix, dimension table prefix, key naming style, and whether to include SCD Type 2 columns for tracking history.
+"Alright — here's where the actual work starts. This is the Ingestion page. You have two options: upload static files like CSVs or spreadsheets, or connect directly to a live database if the data is already sitting somewhere.
 
-We'll leave it on the Kimball preset and move on."
+I've already uploaded the dataset for this demo. You can see the files listed here with their status showing as 'Ready' — that means they've been received and are ready to be profiled."
 
 ---
 
-### DEMO STEP 5 — Business Requirements Page
+### DEMO STEP 5 — Data Profiling
 **What to say:**
 
-"Now here's where it gets interesting. This is the Business Requirements page — and it's essentially a conversation with an AI Business Analyst.
+"Now we run profiling.
 
-You can type your questions in natural language, or — and this is the really powerful part — you can upload a meeting transcript or notes from a client session, and the AI will extract the requirements for you.
+A couple of things to note on this page. First — the technical configuration page. Before the profiling results show up, you set your naming conventions here. You can choose a preset — Kimball Standard, for example — or configure it manually: fact table prefix, dimension prefix, key naming style. Another future purpose of this page is flexibility: users must be able to influence behavior even for rules/settings that are not yet explicitly built into the UI.
 
-Watch what happens when I upload this transcript."
-
-*[Upload the transcript / show the extraction]*
-
-"See how it's taken the conversation and turned it into structured requirements? Each one has a name, a description, a type — KPI, dimension, process — and a status. These get saved as 'banked requirements' that the rest of the pipeline is built on.
-
-We can also just chat here — if I type something like 'I also want to track returns by product category', it adds that as a new requirement instantly."
+Once that's set and profiling completes, we can go to the profiling page. There's a summary tab with key callouts about your data — column types, row counts, missing values. There's a visual tab with charts for a quick visual overview. And then there's the Profiling Agent — this is where it gets interesting. The AI has run a script to scan, summarise, and actually interpret the data. It gives you key findings, a join key map showing how your files relate to each other, and a list of dimension candidates — essentially it's already started suggesting what the data model could look like."
 
 ---
 
-### DEMO STEP 6 — Bus Matrix Page
+### DEMO STEP 6 — Business Requirements
 **What to say:**
 
-"Once requirements are confirmed, we move to the Bus Matrix. This is a standard technique from the Kimball data warehousing methodology — it's essentially a checklist that maps every business process to every dimension it needs.
+"Next is the Requirements page — this is where the business context gets captured.
 
-If I click Generate via AI, the system reads all the banked requirements and automatically builds this grid.
+You can upload context files here — meeting transcripts, existing dashboards, any notes from client sessions. Watch what happens when I upload this interview transcript."
 
-Here you can see the processes — like Sales Transactions, Returns — down the side. And the dimensions — Date, Customer, Product, Store — across the top. Each tick means 'this process uses this dimension.'
+*[Upload the file and show the extraction]*
 
-I can manually adjust these ticks if something doesn't look right. Once I'm happy, I move forward."
+"See that — it's read the document and extracted a structured list of business requirements. Each one has a name, a description, a type — KPI, dimension, or business process — and a status. Everything starts as a draft.
+
+You're not locked into what the AI produces. You can chat directly with it — ask why a particular requirement was added, challenge it, or ask it to refine something. You can also manually edit, add, or delete requirements yourself. Once you're happy with the list, you confirm them and they move into the 'banked' stage — locked in and ready to drive the next steps."
+
+*[If time allows, add one requirement via chat to show the real-time update]*
 
 ---
 
-### DEMO STEP 7 — Schema Editor Page
+### DEMO STEP 7 — Bus Matrix
 **What to say:**
 
-"This is where the magic happens. The AI takes the bus matrix and generates the actual physical data model — the tables, columns, primary keys, foreign keys, and relationships.
+"With requirements banked, we move to the Bus Matrix. This is the Kimball methodology's way of mapping business processes to the dimensions they need — you get a clear grid showing what facts sit against what dimensions.
 
-You're looking at it as an ERD — an Entity Relationship Diagram. The fact tables are in the middle. The dimension tables branch off them. Each table shows its columns.
+Rather than building it from scratch, I'll hit Generate via AI. The system reads everything we've banked and builds the matrix automatically. You can see the processes down the side and the dimensions across the top — each tick means that process uses that dimension.
 
-I can click on any table to edit it — rename columns, add columns, change types. I can also add entirely new tables if needed. This gives you full control before anything is locked in."
+I can add or remove dimensions directly in the table if something's missing or needs adjusting. Any changes I make here are immediately saved and will flow forward into the schema."
 
 ---
 
-### DEMO STEP 8 — Code Generation Page
+### DEMO STEP 8 — Schema Generation
 **What to say:**
 
-"Once the schema is approved, we generate the code. The tool produces two things: raw SQL DDL — the CREATE TABLE statements — and dbt models, which is the modern standard for data transformation in warehouses like Snowflake, BigQuery, and Redshift.
+"Now we generate the schema. The system takes the bus matrix — the facts, the dimensions, the relationships — and builds the actual physical data model.
 
-You can download all of this and hand it directly to an engineering team. It's production-ready."
+This is the ERD — the Entity Relationship Diagram. Fact tables in the centre, dimension tables branching off them, with the relationships drawn between them. Every table shows its columns, primary keys, and foreign keys.
+
+I have two ways to modify this. I can work directly on the board — click any table to rename it, add or remove columns, delete a table entirely. Or I can use the AI chat on the right — I can type something like 'rename dim_order to dim_customer_orders' and it'll make the change for me. This is useful when you want to make several structural changes at once without clicking through each one manually.
+
+Once the schema looks exactly right, I can export it as a PNG — useful for sharing with a client or a technical team. Then I hit Approve and Export."
 
 ---
 
-### DEMO STEP 9 — Deploy Page
+### DEMO STEP 9 — Code Generation and Deployment
 **What to say:**
 
-"And finally — deploy. You fill in your PostgreSQL connection details — host, port, database name, credentials — and you can preview the exact SQL that's about to run. You can see every CREATE TABLE and ALTER TABLE statement before anything touches the database.
+"This step is Code Generation. The platform produces the complete SQL DDL — all the CREATE TABLE statements — along with dbt models and accompanying documentation.
 
-Hit deploy, and watch the console. It connects, runs the statements one by one, and logs everything — green ticks for success, red if something fails.
+From here I can copy the code, download everything as a ZIP, or deploy directly. I'll deploy to a local database so you can see it happen live."
 
-The tables now exist in your target database. End to end — from raw data to a live schema."
+*[Click Deploy, fill in the connection details, click Deploy DDL]*
+
+"Watch the console — it's connecting, then running each statement one by one. Green ticks for tables created successfully. Once it's done, those tables physically exist in the database. End to end — from a raw dataset and a business conversation to a live, deployed star schema.
+
+That's the full flow."
 
 ---
 

@@ -17,6 +17,7 @@
   --bg-card: #0d0d10;
   --bg-code: #000000;
   --bg-input: #1a1a1a;
+  --btn-generate-text: #000000;
 }
 
 * {
@@ -158,6 +159,7 @@ a {
   --bg-card: #ffffff;
   --bg-code: #f1f5f9;
   --bg-input: #f0f3f8;
+  --btn-generate-text: #ffffff;
 }
 
 [data-theme="light"] body {

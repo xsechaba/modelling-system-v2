@@ -145,7 +145,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Fallback: use edge metadata only — do NOT assume the FK col name matches the dim PK
     if (!fkCol && edge.targetColumn) fkCol = edge.targetColumn;
 
-    if (fkCol && dimPK) {
+    // Only generate the constraint if the FK column actually exists in the fact table
+    const factColNames = (factNode.data.cols || []).map((c: string) => c.split(' ')[0]);
+    if (fkCol && dimPK && factColNames.includes(fkCol)) {
       const constraintName = `fk_${factTable}_${fkCol}`.substring(0, 63);
       ddlStatements.push(
         `ALTER TABLE "${targetSchema}"."${factTable}" ADD CONSTRAINT "${constraintName}" FOREIGN KEY ("${fkCol}") REFERENCES "${targetSchema}"."${dimTable}" ("${dimPK}") ON DELETE SET NULL;`
@@ -201,6 +203,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         stateDataParsed.deployedAt = Date.now();
         stateDataParsed.deployTarget = { host, port, database, schema: targetSchema };
+        stateDataParsed.deployLogs = { success: true, logs };
 
         await prisma.projectState.update({
           where: { projectId: id },
@@ -220,6 +223,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const errMsg = connErr?.message || connErr?.code || JSON.stringify(connErr) || 'Unknown error';
     logs.push(`Connection failed: ${errMsg}`);
     if (connErr?.code) logs.push(`Error code: ${connErr.code}`);
+    // Persist failed deploy logs so the user can see them on return
+    try {
+      const stateRes = await prisma.projectState.findUnique({ where: { projectId: id } });
+      if (stateRes) {
+        const stateDataParsed = JSON.parse(stateRes.stateData || '{}');
+        stateDataParsed.deployLogs = { success: false, logs };
+        await prisma.projectState.update({
+          where: { projectId: id },
+          data: { stateData: JSON.stringify(stateDataParsed) },
+        });
+      }
+    } catch { /* best-effort */ }
     return NextResponse.json({ success: false, logs, ddl: ddlStatements }, { status: 500 });
   } finally {
     try { await client.end(); } catch { /* ignore */ }
@@ -320,7 +335,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!fkCol && edge.sourceColumn) fkCol = edge.sourceColumn;
     if (!fkCol && targetPK) fkCol = targetPK;
 
-    if (fkCol && targetPK) {
+    // Only generate the constraint if the FK column actually exists in the source table
+    const sourceColNames = (sourceNode.data.cols || []).map((c: string) => c.split(' ')[0]);
+    if (fkCol && targetPK && sourceColNames.includes(fkCol)) {
       const constraintName = `fk_${edge.source}_${fkCol}`.substring(0, 63);
       ddlStatements.push(
         `ALTER TABLE "${targetSchema}"."${edge.source}" ADD CONSTRAINT "${constraintName}" FOREIGN KEY ("${fkCol}") REFERENCES "${targetSchema}"."${edge.target}" ("${targetPK}") ON DELETE SET NULL;`
@@ -331,6 +348,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // Check previous deployment info
   const deployedAt = parsed.deployedAt || null;
   const deployTarget = parsed.deployTarget || null;
+  const deployLogs = parsed.deployLogs || null;
 
   return NextResponse.json({
     ddl: ddlStatements,
@@ -339,5 +357,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     dimCount: dimNodes.length,
     deployedAt,
     deployTarget,
+    deployLogs,
   });
 }
